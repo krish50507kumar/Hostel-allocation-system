@@ -1,7 +1,8 @@
 /* ============================================
-   HOSTEL BOOKING — LIGHT THEME & WIDE LAYOUT
+   HOSTEL BOOKING — LIGHT THEME & RESPONSIVE LAYOUT
    Inspired by Boutique Hostel Aesthetic
    Warm Cream · Lush Teal · Refined Typography
+   Mobile & Desktop Optimized
    ============================================ */
 
 /* ---------- Google Fonts ---------- */
@@ -61,6 +62,8 @@
 html {
   scroll-behavior: smooth;
   background-color: var(--bg);
+  overflow-x: hidden;
+  width: 100%;
 }
 
 body {
@@ -72,6 +75,8 @@ body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   min-height: 100vh;
+  overflow-x: hidden;
+  width: 100%;
 }
 
 img, svg { display: block; max-width: 100%; }
@@ -113,26 +118,29 @@ p {
   flex-direction: column;
   min-height: 100vh;
   background-color: var(--bg);
+  width: 100%;
+  overflow-x: hidden;
 }
 
 .loading-shell {
   min-height: 100vh;
   display: flex;
   align-items: flex-start;
-  padding: 48px clamp(24px, 4vw, 64px);
+  padding: 48px clamp(20px, 4vw, 64px);
 }
 
-/* ---------- Top Navigation (Wide & Aligned) ---------- */
+/* ---------- Top Navigation (Responsive Wide & Mobile Friendly) ---------- */
 .topnav {
   position: sticky;
   top: 0;
   z-index: 100;
   height: var(--nav-h);
-  background: rgba(255, 255, 255, 0.94);
+  background: rgba(255, 255, 255, 0.95);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   border-bottom: 1px solid var(--line);
   box-shadow: 0 1px 3px rgba(25, 23, 20, 0.04);
+  width: 100%;
 }
 
 .topnav__inner {
@@ -140,11 +148,12 @@ p {
   margin: 0 auto;
   width: 100%;
   height: 100%;
-  padding: 0 clamp(20px, 3.5vw, 56px);
+  padding: 0 clamp(16px, 3.5vw, 56px);
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 28px;
+  gap: 20px;
+  position: relative;
 }
 
 .topnav__brand {
@@ -173,6 +182,14 @@ p {
   color: #ffffff;
   font-family: 'Playfair Display', Georgia, serif;
   box-shadow: 0 2px 8px rgba(13, 148, 136, 0.35);
+}
+
+.topnav__menu {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex: 1;
+  gap: 24px;
 }
 
 .topnav__links {
@@ -241,6 +258,10 @@ p {
   flex-shrink: 0;
 }
 
+.topnav__hamburger {
+  display: none;
+}
+
 /* ---------- Main Content Layout (Expansive & Breathable) ---------- */
 .page-content {
   flex: 1;
@@ -299,6 +320,7 @@ p {
 .page-hero__text {
   position: relative;
   z-index: 1;
+  width: 100%;
 }
 
 .page-hero__eyebrow {
@@ -685,10 +707,12 @@ button.link:hover, .btn-link:hover {
 /* ---------- Table Layout (Modern Clean Sheet) ---------- */
 .table-wrap {
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
   border-radius: var(--radius);
   border: 1px solid var(--line);
   box-shadow: var(--shadow-xs);
   background: var(--surface);
+  width: 100%;
 }
 
 table {
@@ -840,6 +864,7 @@ tbody tr:hover { background: var(--surface2); }
   justify-content: center;
   padding: 20px;
   backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
   animation: fadeIn .15s ease;
 }
 
@@ -996,6 +1021,7 @@ tbody tr:hover { background: var(--surface2); }
 .login-shell {
   min-height: 100vh;
   display: flex;
+  width: 100%;
 }
 
 .login-aside {
@@ -1164,27 +1190,490 @@ input:focus-visible, select:focus-visible {
   outline-offset: 2px;
 }
 
-/* ---------- Responsive Breakpoints ---------- */
+/* ==========================================================================
+   RESPONSIVE MEDIA QUERIES FOR ALL SCREEN SIZES (DESKTOP, TABLET, PHONE)
+   ========================================================================== */
+
+/* Tablet & Mobile Header Breakpoint (<= 880px) */
+@media (max-width: 880px) {
+  :root {
+    --nav-h: 64px;
+  }
+
+  .topnav__inner {
+    padding: 0 18px;
+  }
+
+  .topnav__hamburger {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 5px;
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    cursor: pointer;
+    box-shadow: none;
+    flex-shrink: 0;
+    z-index: 102;
+    transition: background 0.15s, border-color 0.15s;
+  }
+
+  .topnav__hamburger:hover {
+    background: var(--surface2);
+    border-color: var(--line2);
+    transform: none;
+    box-shadow: none;
+  }
+
+  .topnav__hamburger-bar {
+    width: 20px;
+    height: 2px;
+    background: var(--fg);
+    border-radius: 2px;
+    transition: transform 0.25s ease, opacity 0.2s ease;
+    display: block;
+  }
+
+  .topnav__hamburger.active .topnav__hamburger-bar:nth-child(1) {
+    transform: translateY(7px) rotate(45deg);
+  }
+  .topnav__hamburger.active .topnav__hamburger-bar:nth-child(2) {
+    opacity: 0;
+  }
+  .topnav__hamburger.active .topnav__hamburger-bar:nth-child(3) {
+    transform: translateY(-7px) rotate(-45deg);
+  }
+
+  .topnav__menu {
+    display: none;
+    position: fixed;
+    top: var(--nav-h);
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(248, 246, 240, 0.98);
+    backdrop-filter: blur(24px) saturate(180%);
+    -webkit-backdrop-filter: blur(24px) saturate(180%);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 24px 20px 48px;
+    gap: 20px;
+    border-bottom: 1px solid var(--line);
+    box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12);
+    z-index: 99;
+  }
+
+  .topnav__menu.open {
+    display: flex;
+    animation: mobileNavFade 0.22s ease-out;
+  }
+
+  @keyframes mobileNavFade {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .topnav__links {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+    flex: none;
+  }
+
+  .topnav__link {
+    padding: 12px 18px;
+    font-size: 1rem;
+    font-weight: 600;
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    display: block;
+    text-align: left;
+    box-shadow: var(--shadow-xs);
+  }
+
+  .topnav__link.active {
+    background: var(--accent-lt);
+    border-color: var(--accent);
+    color: var(--accent-dk);
+    font-weight: 700;
+  }
+
+  .topnav__divider {
+    display: none;
+  }
+
+  .topnav__actions {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    padding-top: 16px;
+    border-top: 1px solid var(--line);
+  }
+
+  .topnav__user {
+    justify-content: center;
+    padding: 10px 16px;
+    font-size: 0.92rem;
+  }
+
+  .btn-signout {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+    font-size: 0.92rem;
+  }
+}
+
+/* Medium Tablets & Large Phones (<= 960px) */
 @media (max-width: 960px) {
-  .login-aside { display: none; }
-  .login-main  { padding: 36px 20px; }
-  .page-hero   { padding: 32px 32px; min-height: 140px; }
-  .page-hero h1 { font-size: 1.85rem; }
+  .login-aside {
+    display: none;
+  }
+
+  .login-main {
+    padding: 36px 20px;
+  }
 }
 
+/* Phones & Small Tablets (<= 768px) */
 @media (max-width: 768px) {
-  .topnav__inner { padding: 0 16px; gap: 16px; }
-  .page-content { padding: 24px 16px 60px; }
-  .input-row { grid-template-columns: 1fr; }
-  .stat-grid { grid-template-columns: repeat(2, 1fr); }
-  .chat-msg__bubble { max-width: 88%; }
+  body {
+    font-size: 14.5px;
+  }
+
+  /* Prevent automatic iOS Safari zoom when tapping inputs */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  .page-content {
+    padding: 20px 16px 64px;
+  }
+
+  /* Page Hero Banner */
+  .page-hero {
+    padding: 26px 20px;
+    margin-bottom: 20px;
+    border-radius: var(--radius);
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+  }
+
+  .page-hero h1 {
+    font-size: 1.75rem;
+    line-height: 1.2;
+  }
+
+  .page-hero p {
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  .page-hero__eyebrow {
+    font-size: 0.7rem;
+    padding: 3px 12px;
+    margin-bottom: 8px;
+  }
+
+  /* Filter Bar */
+  .filter-bar {
+    padding: 14px 16px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .filter-bar label {
+    width: 100%;
+    min-width: 0;
+    max-width: 100% !important;
+  }
+
+  .filter-bar span {
+    margin-left: 0 !important;
+    font-size: 0.82rem;
+    padding-top: 2px;
+  }
+
+  /* Grid & Room Package Cards */
+  .grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+
+  .room-card {
+    border-radius: var(--radius);
+  }
+
+  .room-card__header {
+    height: 105px;
+    padding: 14px 18px;
+  }
+
+  .room-card__body {
+    padding: 18px;
+    gap: 12px;
+  }
+
+  .room-card button {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 20px;
+    font-size: 0.92rem;
+  }
+
+  /* Bed Picker Modal on Phones */
+  .modal-overlay {
+    padding: 12px;
+    align-items: flex-end;
+  }
+
+  .modal {
+    width: 100%;
+    max-width: 100%;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 22px 18px;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  .modal__actions {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(105px, 1fr));
+    gap: 8px;
+  }
+
+  .modal__actions button {
+    width: 100%;
+    padding: 12px 8px;
+    font-size: 0.88rem;
+  }
+
+  /* Booking Cards */
+  .booking-card__body {
+    padding: 18px;
+    gap: 10px;
+  }
+
+  .booking-card button {
+    width: 100%;
+    justify-content: center;
+    padding: 10px;
+    margin-top: 6px !important;
+  }
+
+  /* Stat Cards */
+  .stat-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    margin-bottom: 20px;
+  }
+
+  .stat-card {
+    padding: 18px 16px;
+  }
+
+  .stat-card__value {
+    font-size: 1.9rem;
+  }
+
+  .stat-card__label {
+    font-size: 0.74rem;
+  }
+
+  /* Admin Cards & Forms */
+  .card-pad {
+    padding: 20px 18px;
+  }
+
+  .form-card {
+    max-width: 100%;
+  }
+
+  .input-row {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  .form-group button {
+    width: 100%;
+    justify-content: center;
+    padding: 12px;
+  }
+
+  /* Table & Pagination */
+  .table-wrap {
+    border-radius: var(--radius-sm);
+    margin-bottom: 16px;
+  }
+
+  table {
+    min-width: 680px;
+    font-size: 0.85rem;
+  }
+
+  th, td {
+    padding: 11px 14px;
+  }
+
+  .pagination {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .pagination button {
+    width: 100%;
+    justify-content: center;
+    padding: 11px;
+  }
+
+  .pagination span {
+    text-align: center;
+    order: -1;
+  }
+
+  /* AI Assistant Chat UI */
+  .chat-messages {
+    padding: 16px 14px;
+    min-height: 220px;
+    gap: 12px;
+  }
+
+  .chat-msg__bubble {
+    max-width: 88%;
+    font-size: 0.88rem;
+    padding: 10px 14px;
+  }
+
+  .chat-prompts {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .chat-prompt-btn {
+    width: 100%;
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 0.86rem;
+  }
+
+  .chat-form {
+    padding: 5px 5px 5px 16px;
+  }
+
+  .chat-form button {
+    padding: 9px 18px;
+  }
+
+  /* Login Form */
+  .login-main {
+    padding: 24px 16px;
+    align-items: flex-start;
+  }
+
+  .login-box {
+    gap: 20px;
+  }
+
+  .login-box__heading h2 {
+    font-size: 1.65rem;
+  }
+
+  .login-box__form {
+    padding: 24px 18px;
+    border-radius: var(--radius);
+    gap: 14px;
+  }
 }
 
-@media (max-width: 520px) {
-  .grid { grid-template-columns: 1fr; }
-  .topnav__user { display: none; }
+/* Small Phone Screens (<= 480px, e.g. iPhone SE, compact Androids) */
+@media (max-width: 480px) {
+  .page-content {
+    padding: 16px 12px 56px;
+  }
+
+  .page-hero {
+    padding: 20px 16px;
+    border-radius: var(--radius-sm);
+  }
+
+  .page-hero h1 {
+    font-size: 1.5rem;
+  }
+
+  .page-hero p {
+    font-size: 0.86rem;
+  }
+
+  .topnav__brand {
+    font-size: 1.1rem;
+    gap: 8px;
+  }
+
+  .topnav__brand-icon {
+    width: 34px;
+    height: 34px;
+    font-size: 0.9rem;
+  }
+
+  .room-card__header {
+    height: 96px;
+    padding: 12px 14px;
+  }
+
+  .room-card__title {
+    font-size: 1.2rem;
+  }
+
+  .chip {
+    font-size: 0.74rem;
+    padding: 3px 10px;
+  }
+
+  .stat-card__value {
+    font-size: 1.65rem;
+  }
+
+  .stat-card__label {
+    font-size: 0.68rem;
+  }
+
+  .login-box__heading h2 {
+    font-size: 1.45rem;
+  }
+
+  .login-box__form {
+    padding: 20px 14px;
+  }
 }
 
+/* Extra Small Phone Screens (<= 360px) */
+@media (max-width: 360px) {
+  .stat-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .modal__actions {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Accessibility: Reduced Motion */
 @media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after { transition: none !important; animation: none !important; }
+  *, *::before, *::after {
+    transition: none !important;
+    animation: none !important;
+  }
 }
