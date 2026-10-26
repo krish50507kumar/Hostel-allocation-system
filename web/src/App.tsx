@@ -57,7 +57,7 @@ export default function App() {
               <span>HostelHub</span>
             </NavLink>
 
-            {/* Clear, labeled menu toggle for smaller screens */}
+            {/* Clear, neutral menu toggle for smaller screens */}
             <button
               className={`topnav__toggle ${menuOpen ? "active" : ""}`}
               onClick={() => setMenuOpen(!menuOpen)}
@@ -73,40 +73,33 @@ export default function App() {
               <span className="topnav__toggle-label">{menuOpen ? "Close" : "Menu"}</span>
             </button>
 
-            {/* Main navigation (Desktop horizontal, Tablet/Mobile spacious drawer) */}
+            {/* Main navigation (all links grouped together on left) */}
             <div className={`topnav__menu ${menuOpen ? "open" : ""}`}>
-              <div className="topnav__menu-section">
-                <div className="topnav__menu-label">Main Menu</div>
-                <nav className="topnav__links">
-                  <NavLink
-                    to="/student/rooms"
-                    onClick={() => setMenuOpen(false)}
-                    className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
-                  >
-                    Rooms
-                  </NavLink>
-                  <NavLink
-                    to="/student/ai-assistant"
-                    onClick={() => setMenuOpen(false)}
-                    className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
-                  >
-                    AI Assistant
-                  </NavLink>
-                  <NavLink
-                    to="/student/bookings"
-                    onClick={() => setMenuOpen(false)}
-                    className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
-                  >
-                    My Bookings
-                  </NavLink>
-                </nav>
-              </div>
-
-              {me.role === "admin" && (
-                <div className="topnav__menu-section admin-section-menu">
-                  <span className="topnav__divider" aria-hidden="true" />
-                  <div className="topnav__menu-label">Admin Management</div>
-                  <nav className="topnav__links">
+              <nav className="topnav__links">
+                <NavLink
+                  to="/student/rooms"
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
+                >
+                  Rooms
+                </NavLink>
+                <NavLink
+                  to="/student/ai-assistant"
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
+                >
+                  AI Assistant
+                </NavLink>
+                <NavLink
+                  to="/student/bookings"
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
+                >
+                  My Bookings
+                </NavLink>
+                {me.role === "admin" && (
+                  <>
+                    <span className="topnav__divider" aria-hidden="true" />
                     <NavLink
                       to="/admin"
                       onClick={() => setMenuOpen(false)}
@@ -128,9 +121,9 @@ export default function App() {
                     >
                       Settings
                     </NavLink>
-                  </nav>
-                </div>
-              )}
+                  </>
+                )}
+              </nav>
 
               <div className="topnav__actions">
                 <div className="topnav__user">
@@ -166,9 +159,9 @@ export default function App() {
         </Routes>
       </main>
 
-      {/* Mobile Bottom Quick Navigation Bar (always visible & spacious on phones) */}
+      {/* Mobile Bottom Quick Navigation Bar on phones */}
       {me && (
-        <nav className="bottom-bar" aria-label="Mobile bottom navigation">
+        <nav className="bottom-bar" aria-label="Mobile quick navigation">
           <NavLink
             to="/student/rooms"
             className={({ isActive }) => "bottom-bar__item" + (isActive ? " active" : "")}

@@ -193,29 +193,20 @@ p {
   align-items: center;
   justify-content: space-between;
   flex: 1;
-  gap: 24px;
-}
-
-.topnav__menu-section {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.topnav__menu-label {
-  display: none;
+  gap: 20px;
 }
 
 .topnav__links {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
+  flex: 1;
 }
 
 .topnav__link {
-  padding: 8px 18px;
+  padding: 7px 15px;
   border-radius: var(--radius-pill);
-  font-size: .92rem;
+  font-size: .88rem;
   font-weight: 600;
   color: var(--fg-2);
   text-decoration: none;
@@ -237,9 +228,9 @@ p {
 
 .topnav__divider {
   width: 1px;
-  height: 24px;
+  height: 22px;
   background: var(--line);
-  margin: 0 10px;
+  margin: 0 8px;
   flex-shrink: 0;
 }
 
@@ -1208,9 +1199,8 @@ input:focus-visible, select:focus-visible {
    RESPONSIVE MEDIA QUERIES FOR ALL SCREEN SIZES (DESKTOP, TABLET, PHONE)
    ========================================================================== */
 
-/* Small Screens & Tablets Breakpoint (<= 1080px) */
-/* When window or screen width is <= 1080px, options transition to spacious drawer */
-@media (max-width: 1080px) {
+/* Small Screens & Tablets Breakpoint (<= 920px) */
+@media (max-width: 920px) {
   :root {
     --nav-h: 66px;
   }
@@ -1219,37 +1209,49 @@ input:focus-visible, select:focus-visible {
     padding: 0 clamp(16px, 3vw, 28px);
   }
 
-  /* Distinct, clearly labeled toggle button */
-  .topnav__toggle {
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    padding: 8px 16px;
-    border: 1.5px solid var(--line2);
-    border-radius: var(--radius-pill);
-    background: var(--surface);
-    cursor: pointer;
-    color: var(--fg);
-    font-size: 0.9rem;
-    font-weight: 700;
-    box-shadow: var(--shadow-xs);
-    transition: all 0.15s ease;
+  /* Distinct, neutral pill toggle button - NEVER STAYS GREEN */
+  button.topnav__toggle {
+    display: inline-flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+    padding: 8px 16px !important;
+    border: 1.5px solid var(--line2) !important;
+    border-radius: var(--radius-pill) !important;
+    background: var(--surface) !important;
+    cursor: pointer !important;
+    color: var(--fg) !important;
+    font-size: 0.9rem !important;
+    font-weight: 700 !important;
+    box-shadow: var(--shadow-xs) !important;
+    transition: all 0.15s ease !important;
     z-index: 102;
+    outline: none !important;
+    transform: none !important;
   }
 
-  .topnav__toggle:hover {
-    background: var(--surface2);
-    border-color: var(--accent);
-    color: var(--accent-dk);
-    transform: none;
-    box-shadow: var(--shadow-sm);
+  button.topnav__toggle:hover,
+  button.topnav__toggle:focus,
+  button.topnav__toggle:active {
+    background: var(--surface2) !important;
+    color: var(--fg) !important;
+    border-color: var(--fg) !important;
+    box-shadow: var(--shadow-sm) !important;
+    transform: none !important;
+    outline: none !important;
   }
 
-  .topnav__toggle.active {
-    background: var(--accent);
-    color: #ffffff;
-    border-color: var(--accent);
-    box-shadow: 0 2px 10px rgba(13, 148, 136, 0.35);
+  button.topnav__toggle.active {
+    background: var(--fg) !important;
+    color: #ffffff !important;
+    border-color: var(--fg) !important;
+    box-shadow: var(--shadow-sm) !important;
+  }
+
+  button.topnav__toggle.active:hover,
+  button.topnav__toggle.active:focus {
+    background: var(--fg-2) !important;
+    color: #ffffff !important;
+    border-color: var(--fg-2) !important;
   }
 
   .topnav__toggle-bars {
@@ -1260,22 +1262,22 @@ input:focus-visible, select:focus-visible {
     width: 16px;
   }
 
-  .topnav__hamburger-bar {
+  button.topnav__toggle .topnav__hamburger-bar {
     height: 2px;
     width: 100%;
-    background: currentColor;
+    background: currentColor !important;
     border-radius: 2px;
     transition: transform 0.22s ease, opacity 0.2s ease;
     display: block;
   }
 
-  .topnav__toggle.active .topnav__hamburger-bar:nth-child(1) {
+  button.topnav__toggle.active .topnav__hamburger-bar:nth-child(1) {
     transform: translateY(5.5px) rotate(45deg);
   }
-  .topnav__toggle.active .topnav__hamburger-bar:nth-child(2) {
+  button.topnav__toggle.active .topnav__hamburger-bar:nth-child(2) {
     opacity: 0;
   }
-  .topnav__toggle.active .topnav__hamburger-bar:nth-child(3) {
+  button.topnav__toggle.active .topnav__hamburger-bar:nth-child(3) {
     transform: translateY(-5.5px) rotate(-45deg);
   }
 
@@ -1296,7 +1298,7 @@ input:focus-visible, select:focus-visible {
     align-items: stretch;
     justify-content: flex-start;
     padding: 24px 20px 110px;
-    gap: 22px;
+    gap: 20px;
     border-bottom: 1px solid var(--line);
     box-shadow: 0 16px 36px rgba(0, 0, 0, 0.12);
     z-index: 99;
@@ -1310,24 +1312,6 @@ input:focus-visible, select:focus-visible {
   @keyframes mobileNavFade {
     from { opacity: 0; transform: translateY(-8px); }
     to { opacity: 1; transform: translateY(0); }
-  }
-
-  .topnav__menu-section {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    width: 100%;
-  }
-
-  .topnav__menu-label {
-    display: block;
-    font-size: 0.74rem;
-    font-weight: 800;
-    text-transform: uppercase;
-    letter-spacing: 0.12em;
-    color: var(--muted);
-    margin-bottom: 4px;
-    padding-left: 4px;
   }
 
   .topnav__links {
@@ -1379,7 +1363,7 @@ input:focus-visible, select:focus-visible {
     gap: 12px;
     padding-top: 18px;
     border-top: 1px solid var(--line);
-    margin-top: 8px;
+    margin-top: 6px;
   }
 
   .topnav__user {
