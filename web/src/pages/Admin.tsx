@@ -11,7 +11,7 @@ const STAT_LABELS: Record<string, string> = {
   occupied:  "Occupied",
 };
 
-const FACILITIES = ["study_desk", "attached_bathroom", "wifi", "air_conditioning"];
+const FACILITIES = ["study_desk", "attached_bathroom", "wifi", "air_conditioning","Bed","Mess","Elevator"];
 
 export default function Admin() {
   const [blds, setBlds]   = useState<Bld[]>([]);
