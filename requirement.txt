@@ -1,0 +1,6 @@
+# Testing framework for allocation engine (pytest engine/allocator.py)
+pytest>=7.4.0
+
+# Optional Supabase client & environment management
+supabase>=2.0.0
+python-dotenv>=1.0.0

@@ -136,8 +136,9 @@ npm test
 ```
 
 ### Allocation Engine Tests
-Run pytest on the Python allocation module:
+Install Python requirements and run pytest on the allocation module:
 ```bash
+pip install -r requirements.txt
 pytest engine/allocator.py
 ```
 
