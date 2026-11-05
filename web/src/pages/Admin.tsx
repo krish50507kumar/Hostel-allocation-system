@@ -11,13 +11,19 @@ const STAT_LABELS: Record<string, string> = {
   occupied:  "Occupied",
 };
 
+const FACILITIES = ["study_desk", "attached_bathroom", "wifi", "air_conditioning"];
+
 export default function Admin() {
   const [blds, setBlds]   = useState<Bld[]>([]);
   const [stats, setStats] = useState<Stats | null>(null);
   const [err, setErr]     = useState("");
   const [msg, setMsg]     = useState("");
   const [bName, setBName] = useState("");
+  const [desc, setDesc]   = useState("");
+  const [facs, setFacs]   = useState<string[]>([]);
   const [r, setR] = useState({ building_id: "", room_number: "", room_type: "double", capacity: 2 });
+
+  const toggle = (k: string) => setFacs((f) => f.includes(k) ? f.filter((x) => x !== k) : [...f, k]);
 
   async function load() {
     const [b, rooms, beds, occ] = await Promise.all([
@@ -34,19 +40,22 @@ export default function Admin() {
 
   async function addBuilding(e: React.FormEvent) {
     e.preventDefault();
-    const { error } = await supabase.rpc("admin_create_building", { p_name: bName.trim(), p_description: null });
+    const { error } = await supabase.rpc("admin_create_building", {
+      p_name: bName.trim(),
+      p_description: desc.trim() || null,
+    });
     if (error) return setErr(friendly(error));
-    setErr(""); setMsg("Building created."); setBName(""); load();
+    setErr(""); setMsg("Building created."); setBName(""); setDesc(""); load();
   }
 
   async function addRoom(e: React.FormEvent) {
     e.preventDefault();
     const { error } = await supabase.rpc("admin_upsert_room", {
       p_room_id: null, p_building_id: r.building_id, p_room_number: r.room_number,
-      p_room_type: r.room_type, p_capacity: r.capacity, p_facilities: [],
+      p_room_type: r.room_type, p_capacity: r.capacity, p_facilities: facs,
     });
     if (error) return setErr(friendly(error));
-    setErr(""); setMsg("Room and beds created."); load();
+    setErr(""); setMsg("Room and beds created."); setFacs([]); load();
   }
 
   const occupancyPct = stats?.beds ? Math.round((stats.occupied / stats.beds) * 100) : 0;
@@ -107,6 +116,9 @@ export default function Admin() {
         <form className="card-pad form-card" onSubmit={addBuilding}>
           <div className="form-group">
             <label>Building name<input required value={bName} onChange={(e) => setBName(e.target.value)} placeholder="e.g. Block A" /></label>
+            <label>Description (optional)
+              <input value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="e.g. North campus hostel" />
+            </label>
             <button type="submit" style={{ alignSelf: "flex-start" }}>Create building</button>
           </div>
         </form>
@@ -128,6 +140,15 @@ export default function Admin() {
               <label>Type<input value={r.room_type} onChange={(e) => setR({ ...r, room_type: e.target.value })} placeholder="e.g. double" /></label>
             </div>
             <label>Capacity (beds)<input type="number" min={1} value={r.capacity} onChange={(e) => setR({ ...r, capacity: +e.target.value })} /></label>
+            <fieldset>
+              <legend>Facilities</legend>
+              {FACILITIES.map((k) => (
+                <label key={k} style={{ flexDirection: "row", gap: 8, fontWeight: 400 }}>
+                  <input type="checkbox" checked={facs.includes(k)} onChange={() => toggle(k)} style={{ width: "auto" }} />
+                  {k.replace(/_/g, " ")}
+                </label>
+              ))}
+            </fieldset>
             <button type="submit" style={{ alignSelf: "flex-start" }}>Create room</button>
           </div>
         </form>
