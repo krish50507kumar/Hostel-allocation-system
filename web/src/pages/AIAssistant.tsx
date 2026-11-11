@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { supabase, friendly } from "../lib";
-import { BedMeter, Facilities } from "../components";
+import { BedMeter, Facilities, FormattedMessage } from "../components";
 
 type Room = {
   room_id: string; building_name: string; room_number: string;
@@ -110,7 +110,9 @@ export default function AIAssistant() {
                 <div className="chat-msg__avatar">
                   {m.role === "user" ? "You" : "AI"}
                 </div>
-                <div className="chat-msg__bubble">{m.text}</div>
+                <div className="chat-msg__bubble">
+                  <FormattedMessage text={m.text} />
+                </div>
               </div>
             ))}
             {busy && (
