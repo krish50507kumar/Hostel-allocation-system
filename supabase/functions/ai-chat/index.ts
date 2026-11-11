@@ -1,114 +1,1042 @@
-// Edge Function: POST /functions/v1/ai-chat  { message, history? }
-// The LLM only calls allowlisted tools. Every tool runs with the CALLER's JWT, so RLS/RPC checks apply.
-// Secrets: supabase secrets set GEMINI_API_KEY=...   (optional GEMINI_MODEL)
+
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
+// ============================================================
+// CONFIGURATION
+// ============================================================
+
 const MODEL = Deno.env.get("GEMINI_MODEL") ?? "gemini-2.0-flash";
-const MAX_TOOL_ROUNDS = 4, MAX_MSG = 500, UUID = /^[0-9a-f-]{36}$/i;
-const hits = new Map<string, number[]>(); // per-instance rate limit (use a DB/Redis limiter in production)
-const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type" };
-const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...cors, "Content-Type": "application/json" } });
-const err = (s: number, code: string, message: string) => json({ error: { code, message } }, s);
 
-const SYSTEM = `You help students find a hostel bed. Rules:
-- Use tools to check CURRENT availability. Never invent buildings, rooms, beds, facilities or policies.
-- Explain recommendations only with fields the tools returned. If a detail is missing, say you cannot verify it.
-- Ask a clarifying question if the request is ambiguous.
-- You can only PROPOSE a booking (propose_booking). Never say a booking exists; the student must confirm in the UI.
-- If a tool fails, say availability could not be verified. Never reveal other students' data.`;
+const MAX_TOOL_ROUNDS = 4;
+const MAX_MSG = 500;
+const MAX_HISTORY = 8;
+const MAX_ROOMS = 10;
+const MAX_FACILITIES = 5;
 
-const tools = [{ functionDeclarations: [
-  { name: "search_rooms", description: "Search rooms that currently have free beds.",
-    parameters: { type: "OBJECT", properties: { building_name: { type: "STRING" }, room_type: { type: "STRING" },
-      required_facilities: { type: "ARRAY", items: { type: "STRING" } } } } },
-  { name: "get_room_details", description: "Get a room's free beds (ids and numbers).",
-    parameters: { type: "OBJECT", properties: { room_id: { type: "STRING" } }, required: ["room_id"] } },
-  { name: "propose_booking", description: "Create a short-lived proposal for one free bed. Not a booking.",
-    parameters: { type: "OBJECT", properties: { bed_id: { type: "STRING" } }, required: ["bed_id"] } },
-] }];
+const UUID =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-Deno.serve(async (req) => {
-  if (req.method === "OPTIONS") return new Response("ok", { headers: cors });
-  if (req.method !== "POST") return err(405, "METHOD_NOT_ALLOWED", "Use POST.");
-  const sb = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!,
-    { global: { headers: { Authorization: req.headers.get("Authorization") ?? "" } } });
-  const { data: { user } } = await sb.auth.getUser();
-  if (!user) return err(401, "UNAUTHENTICATED", "Please sign in again.");
+const hits = new Map<string, number[]>();
 
-  const now = Date.now(), recent = (hits.get(user.id) ?? []).filter((t) => now - t < 60_000);
-  if (recent.length >= 10) return err(429, "RATE_LIMITED", "Too many requests. Wait a minute and try again.");
-  hits.set(user.id, [...recent, now]);
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers":
+    "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+};
 
-  let body: { message?: unknown; history?: unknown };
-  try { body = await req.json(); } catch { return err(400, "BAD_REQUEST", "Invalid JSON."); }
-  if (typeof body.message !== "string" || !body.message.trim() || body.message.length > MAX_MSG)
-    return err(400, "BAD_REQUEST", `Message must be 1-${MAX_MSG} characters.`);
-  const history = (Array.isArray(body.history) ? body.history : []).slice(-8)
-    .filter((h: any) => (h?.role === "user" || h?.role === "model") && typeof h.text === "string")
-    .map((h: any) => ({ role: h.role, parts: [{ text: String(h.text).slice(0, MAX_MSG) }] }));
-  const contents: any[] = [...history, { role: "user", parts: [{ text: body.message.trim() }] }];
+const json = (body: unknown, status = 200) =>
+  new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...cors,
+      "Content-Type": "application/json",
+    },
+  });
 
-  const rooms: any[] = []; let pending: any = null; const checkedAt = new Date().toISOString();
+const err = (status: number, code: string, message: string) =>
+  json({ error: { code, message } }, status);
 
-  async function runTool(name: string, a: any): Promise<unknown> {
-    if (name === "search_rooms") {
-      const { data, error } = await sb.rpc("get_availability"); if (error) throw error;
-      const f = (Array.isArray(a?.required_facilities) ? a.required_facilities : []).slice(0, 5).map((x: any) => String(x).toLowerCase());
-      const out = (data ?? []).filter((r: any) =>
-        (!a?.building_name || r.building_name.toLowerCase().includes(String(a.building_name).toLowerCase())) &&
-        (!a?.room_type || (r.room_type ?? "").toLowerCase() === String(a.room_type).toLowerCase()) &&
-        f.every((x: string) => (r.facilities as string[]).map((y) => y.toLowerCase()).includes(x))
-      ).slice(0, 10).map((r: any) => ({ room_id: r.room_id, building_name: r.building_name, room_number: r.room_number,
-        room_type: r.room_type, facilities: r.facilities, available_beds: Number(r.available_beds), active_beds: Number(r.active_beds), checked_at: checkedAt,
-        evidence: ["room_active", "bed_available"] }));
-      out.forEach((r: any) => { if (!rooms.some((x) => x.room_id === r.room_id)) rooms.push(r); });
-      return { rooms: out };
-    }
-    if (name === "get_room_details") {
-      if (!UUID.test(a?.room_id ?? "")) return { error: "invalid room_id" };
-      const [{ data: beds }, { data: taken }] = await Promise.all([
-        sb.from("beds").select("id, bed_number").eq("room_id", a.room_id).eq("is_active", true).order("bed_number"),
-        sb.rpc("get_taken_bed_ids", { p_room_id: a.room_id })]);
-      const t = new Set((taken ?? []) as string[]);
-      return { free_beds: (beds ?? []).filter((b: any) => !t.has(b.id)).map((b: any) => ({ bed_id: b.id, bed_number: b.bed_number })), checked_at: checkedAt };
-    }
-    if (name === "propose_booking") {
-      if (!UUID.test(a?.bed_id ?? "")) return { error: "invalid bed_id" };
-      const { data, error } = await sb.rpc("create_proposal", { p_bed_id: a.bed_id });
-      if (error) return { error: error.message.includes("ALREADY_HAS") ? "student already has an active booking" : "bed not available" };
-      pending = { proposal_id: data[0].id, expires_at: data[0].expires_at, building_name: data[0].building_name,
-        room_number: data[0].room_number, bed_number: data[0].bed_number };
-      return { proposal_created: true, ...pending, note: "Not a booking until the student confirms." };
-    }
-    return { error: "unknown tool" }; // anything outside the allowlist is rejected
+// ============================================================
+// SYSTEM INSTRUCTIONS
+// ============================================================
+
+const SYSTEM = `
+You are an AI hostel room assistant.
+
+Your responsibility is to help students find available hostel rooms
+using live database information.
+
+SEARCH RULES:
+
+1. Always use search_rooms when a student asks about available rooms,
+   room availability, room facilities or room recommendations.
+
+2. Never claim that a search was performed unless the tool executed.
+
+3. Never invent room information or availability.
+
+4. Use only information returned by database tools.
+
+5. If a search returns zero matching rooms, explain that no matching
+   available rooms were found.
+
+6. If a search fails, explain that availability could not be verified.
+   Never confuse a failed search with zero available rooms.
+
+7. Respect the student's requested building, room type and facilities.
+
+8. For general questions such as "What facilities do rooms have?",
+   search all available rooms without applying a facility filter.
+
+9. When discussing available facilities, use the actual facilities
+   arrays returned by search_rooms.
+
+10. Do not classify beds, available beds or bed numbers as facilities.
+
+11. Do not claim that every room has a facility merely because some
+    rooms have that facility.
+
+12. Distinguish between facilities found in some rooms and facilities
+    found in all rooms.
+
+13. Never invent facilities or add facilities that were not returned
+    by the database.
+
+14. Never contradict database results.
+
+15. Use get_room_details when a student requests individual bed details.
+
+16. Never invent bed numbers from available_beds.
+
+BOOKING RULES:
+
+17. You can only propose a booking using propose_booking.
+
+18. A proposal is NOT a confirmed booking.
+
+19. The student must confirm the proposal in the frontend.
+
+20. Never claim that a booking exists until it is confirmed.
+
+PRIVACY:
+
+21. Never reveal other students' personal information.
+
+RESPONSE STYLE:
+
+22. Give direct, concise and useful answers.
+
+23. Do not unnecessarily repeat room information.
+
+24. If information is missing, say you cannot verify it.
+
+25. Ask clarifying questions when necessary.
+
+BUILDING RULES:
+
+26. Use get_building_details ONLY when a student asks about a building,
+    building descriptions, campus locations or building overviews.
+
+27. Do not call get_building_details when the student is only searching
+    for available rooms, beds or facilities (use search_rooms instead).
+
+28. Use only the name and description returned by get_building_details.
+    Never invent building details or amenities not present in the database.
+`;
+
+// ============================================================
+// GEMINI TOOL DECLARATIONS
+// ============================================================
+
+const tools = [
+  {
+    functionDeclarations: [
+      {
+        name: "search_rooms",
+        description:
+          "Search currently available hostel rooms with free beds. " +
+          "Optional filters include building name, room type and facilities. " +
+          "For general facility questions, leave required_facilities empty.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            building_name: {
+              type: "STRING",
+              description: "Optional building name.",
+            },
+            room_type: {
+              type: "STRING",
+              description: "Optional room type.",
+            },
+            required_facilities: {
+              type: "ARRAY",
+              items: { type: "STRING" },
+              description:
+                "Facilities that every returned room must have. " +
+                "Leave empty when asking about facilities generally.",
+            },
+          },
+        },
+      },
+      {
+        name: "get_room_details",
+        description:
+          "Get actual free bed IDs and bed numbers for a room.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            room_id: {
+              type: "STRING",
+            },
+          },
+          required: ["room_id"],
+        },
+      },
+      {
+        name: "propose_booking",
+        description:
+          "Create a short-lived proposal for one available bed. " +
+          "This is not a confirmed booking.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            bed_id: {
+              type: "STRING",
+            },
+          },
+          required: ["bed_id"],
+        },
+      },
+      {
+        name: "get_building_details",
+        description:
+          "Fetch the name and description of hostel buildings from the active buildings table. " +
+          "Use this ONLY when a student asks about a building, its description, or building overview.",
+        parameters: {
+          type: "OBJECT",
+          properties: {
+            building_name: {
+              type: "STRING",
+              description:
+                "Optional building name (e.g. 'BH6', 'BS13'). If omitted or empty, details for all active buildings are returned.",
+            },
+          },
+        },
+      },
+    ],
+  },
+];
+
+// ============================================================
+// HELPER FUNCTIONS
+// ============================================================
+
+function isObject(value: unknown): value is Record<string, any> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    !Array.isArray(value)
+  );
+}
+
+function safeString(value: unknown): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+// ------------------------------------------------------------
+// FACILITY NORMALIZATION
+// Fixes:
+// "Attached bathroom" = "Attached bathrooms"
+// "Study desk" = "Study desks"
+// "Facility" = "Facilities"
+// ------------------------------------------------------------
+
+
+function normalizeFacilityName(value: string): string {
+  return value
+    .toLowerCase()
+    .trim()
+    .replace(/[_-]+/g, " ")  // Convert underscores and hyphens
+    .replace(/[^\w\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .split(" ")
+    .map((word) => {
+      if (word.length <= 3) return word;
+
+      if (word.endsWith("ies")) {
+        return word.slice(0, -3) + "y";
+      }
+
+      if (word.endsWith("sses")) {
+        return word.slice(0, -2);
+      }
+
+      if (word.endsWith("s") && !word.endsWith("ss")) {
+        return word.slice(0, -1);
+      }
+
+      return word;
+    })
+    .join(" ");
+}
+
+
+function normalizeFacilities(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+
+  return value
+    .filter((x) => typeof x === "string")
+    .map(normalizeFacilityName)
+    .filter(Boolean);
+}
+
+// ------------------------------------------------------------
+// ROOM SEARCH INTENT
+// ------------------------------------------------------------
+
+function isRoomSearchRequest(message: string): boolean {
+  const text = message.toLowerCase();
+
+  // If the student is asking about building details/description, do not force room search
+  if (
+    /\b(building|buildings)\b.*\b(about|detail|details|description|describe|info|what is)\b/i.test(text) ||
+    /\b(about|detail|details|description|describe|info|tell me about)\b.*\b(building|buildings)\b/i.test(text)
+  ) {
+    return false;
   }
 
+  const patterns = [
+    /\b(show|find|search|look for|looking for|display)\b.*\b(room|rooms|hostel|hostels|bed|beds|accommodation)\b/,
+    /\b(room|rooms|hostel|hostels|accommodation)\b.*\b(available|availability|with|having|containing)\b/,
+    /\b(available|availability)\b.*\b(room|rooms|bed|beds)\b/,
+    /\b(facility|facilities|study desk|attached bathroom)\b/,
+    /\b(i need|i want|looking for)\b.*\b(room|rooms|hostel|accommodation)\b/,
+    /\b(studio|single|double|triple)\b.*\b(room|rooms)\b/,
+    /\bany\s+rooms?\b/,
+  ];
+
+  return patterns.some((pattern) => pattern.test(text));
+}
+
+// ------------------------------------------------------------
+// GENERAL FACILITY QUESTIONS
+// ------------------------------------------------------------
+
+function isFacilityOverviewRequest(message: string): boolean {
+  const text = message.toLowerCase();
+
+  const patterns = [
+    /\bwhat\b.*\bfacilit(y|ies)\b/,
+    /\bwhich\b.*\bfacilit(y|ies)\b/,
+    /\blist\b.*\bfacilit(y|ies)\b/,
+    /\bfacilit(y|ies)\b.*\b(do|does|are|available|provided)\b/,
+  ];
+
+  const isOverview = patterns.some((p) => p.test(text));
+
+  const asksForSpecificFacility =
+    /\b(with|having|include|including)\b.*\b(study desk|attached bathroom|bathroom|desk)\b/i.test(
+      text,
+    );
+
+  return isOverview && !asksForSpecificFacility;
+}
+
+// ============================================================
+// EDGE FUNCTION
+// ============================================================
+
+Deno.serve(async (req: Request) => {
+
+  // ----------------------------------------------------------
+  // CORS
+  // ----------------------------------------------------------
+
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: cors });
+  }
+
+  if (req.method !== "POST") {
+    return err(405, "METHOD_NOT_ALLOWED", "Use POST.");
+  }
+
+  // ----------------------------------------------------------
+  // ENVIRONMENT
+  // ----------------------------------------------------------
+
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY");
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+
+  if (!SUPABASE_URL || !SUPABASE_ANON_KEY || !GEMINI_API_KEY) {
+    console.error("Missing environment variables.");
+
+    return err(
+      503,
+      "CONFIGURATION_ERROR",
+      "Assistant configuration is incomplete.",
+    );
+  }
+
+  // ----------------------------------------------------------
+  // AUTHENTICATION
+  // ----------------------------------------------------------
+
+  const authorization = req.headers.get("Authorization");
+
+  if (!authorization) {
+    return err(401, "UNAUTHENTICATED", "Please sign in again.");
+  }
+
+  const sb = createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    {
+      global: {
+        headers: {
+          Authorization: authorization,
+        },
+      },
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    },
+  );
+
+  const {
+    data: { user },
+    error: authError,
+  } = await sb.auth.getUser();
+
+  if (authError || !user) {
+    return err(401, "UNAUTHENTICATED", "Please sign in again.");
+  }
+
+  // ----------------------------------------------------------
+  // RATE LIMIT
+  // ----------------------------------------------------------
+
+  const now = Date.now();
+
+  const recent = (hits.get(user.id) ?? []).filter(
+    (timestamp) => now - timestamp < 60_000,
+  );
+
+  if (recent.length >= 10) {
+    return err(
+      429,
+      "RATE_LIMITED",
+      "Too many requests. Please wait a minute.",
+    );
+  }
+
+  hits.set(user.id, [...recent, now]);
+
+  // ----------------------------------------------------------
+  // REQUEST VALIDATION
+  // ----------------------------------------------------------
+
+  let body: Record<string, unknown>;
+
   try {
-    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
-      const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`, {
-        method: "POST", signal: AbortSignal.timeout(15_000),
-        headers: { "Content-Type": "application/json", "x-goog-api-key": Deno.env.get("GEMINI_API_KEY")! },
-        body: JSON.stringify({ systemInstruction: { parts: [{ text: SYSTEM }] }, contents, tools, generationConfig: { temperature: 0.2 } }),
-      });
-      if (!res.ok) throw new Error(`provider ${res.status}`);
-      const parts = (await res.json()).candidates?.[0]?.content?.parts ?? [];
-      const calls = parts.filter((p: any) => p.functionCall);
-      if (!calls.length || round === MAX_TOOL_ROUNDS) {
-        const reply = parts.map((p: any) => p.text ?? "").join("").trim() || "I could not complete that. Please try rephrasing.";
-        return json({ reply, rooms, pending_action: pending });
-      }
-      contents.push({ role: "model", parts });
-      const responses = [];
-      for (const c of calls) {
-        let response: unknown;
-        try { response = await runTool(c.functionCall.name, c.functionCall.args); }
-        catch { response = { error: "availability could not be verified" }; }
-        responses.push({ functionResponse: { name: c.functionCall.name, response: { result: response } } });
-      }
-      contents.push({ role: "user", parts: responses });
+    const parsed = await req.json();
+
+    if (!isObject(parsed)) {
+      return err(400, "BAD_REQUEST", "Invalid request body.");
     }
-  } catch (e) {
-    console.error("ai-chat failed:", e); // log outcome only: no keys, no student data
-    return err(503, "AI_UNAVAILABLE", "The assistant is unavailable right now. You can still browse and book rooms manually.");
+
+    body = parsed;
+  } catch {
+    return err(400, "BAD_REQUEST", "Invalid JSON.");
+  }
+
+  const message = safeString(body.message);
+
+  if (!message || message.length > MAX_MSG) {
+    return err(
+      400,
+      "BAD_REQUEST",
+      `Message must contain 1-${MAX_MSG} characters.`,
+    );
+  }
+
+  const history = (
+    Array.isArray(body.history) ? body.history : []
+  )
+    .slice(-MAX_HISTORY)
+    .filter(
+      (h: any) =>
+        isObject(h) &&
+        (h.role === "user" || h.role === "model") &&
+        typeof h.text === "string",
+    )
+    .map((h: any) => ({
+      role: h.role,
+      parts: [
+        { text: h.text.slice(0, MAX_MSG) },
+      ],
+    }));
+
+  const contents: any[] = [
+    ...history,
+    {
+      role: "user",
+      parts: [{ text: message }],
+    },
+  ];
+
+  // ----------------------------------------------------------
+  // STATE
+  // ----------------------------------------------------------
+
+  const rooms: any[] = [];
+
+  let pending: any = null;
+  let searchFailed = false;
+  let searchExecuted = false;
+
+  // ==========================================================
+  // TOOL EXECUTION
+  // ==========================================================
+
+  async function runTool(
+    name: string,
+    args: unknown,
+  ): Promise<unknown> {
+
+    const a = isObject(args) ? args : {};
+
+    // ========================================================
+    // SEARCH ROOMS
+    // ========================================================
+
+    if (name === "search_rooms") {
+
+      const buildingName = safeString(a.building_name);
+      const roomType = safeString(a.room_type);
+
+      // For general facility questions, retrieve all available
+      // rooms instead of filtering by a facility.
+      const facilityOverview = isFacilityOverviewRequest(message);
+
+      const requiredFacilities = facilityOverview
+        ? []
+        : (
+            Array.isArray(a.required_facilities)
+              ? a.required_facilities
+              : []
+          )
+            .filter((x) => typeof x === "string")
+            .map(normalizeFacilityName)
+            .filter(Boolean)
+            .slice(0, MAX_FACILITIES);
+
+      console.log("========== ROOM SEARCH ==========");
+      console.log("Arguments:", JSON.stringify(a));
+      console.log("Facility overview:", facilityOverview);
+      console.log("Required facilities:", requiredFacilities);
+
+      const { data, error } = await sb.rpc("get_availability");
+
+      if (error) {
+        console.error("get_availability failed:", error);
+        throw new Error("Availability RPC failed.");
+      }
+
+      if (!Array.isArray(data)) {
+        console.error("Unexpected availability response:", data);
+        throw new Error("Invalid availability response.");
+      }
+
+      searchExecuted = true;
+
+      console.log("Database rooms:", data.length);
+
+      const filtered = data.filter((r: any) => {
+
+        if (!isObject(r)) return false;
+
+        const building = safeString(r.building_name).toLowerCase();
+        const type = safeString(r.room_type).toLowerCase();
+
+        const facilities = normalizeFacilities(r.facilities);
+
+        const availableBeds = Number(r.available_beds);
+
+        if (
+          !Number.isFinite(availableBeds) ||
+          availableBeds <= 0
+        ) {
+          return false;
+        }
+
+        if (
+          buildingName &&
+          !building.includes(buildingName.toLowerCase())
+        ) {
+          return false;
+        }
+
+        if (
+          roomType &&
+          type !== roomType.toLowerCase()
+        ) {
+          return false;
+        }
+
+        // Match singular/plural and minor naming variations.
+        const matchesFacilities = requiredFacilities.every(
+          (required) =>
+            facilities.some(
+              (available) =>
+                available.includes(required) ||
+                required.includes(available),
+            ),
+        );
+
+        return matchesFacilities;
+      });
+
+      // Keep original database facility values.
+      // Only the matching process uses normalized values.
+      const out = filtered
+        .slice(0, MAX_ROOMS)
+        .map((r: any) => ({
+          room_id: r.room_id,
+          building_name: r.building_name,
+          room_number: r.room_number,
+          room_type: r.room_type,
+          facilities: r.facilities ?? [],
+          available_beds: Number(r.available_beds),
+          checked_at: new Date().toISOString(),
+          evidence: [
+            "room_active",
+            "bed_available",
+          ],
+        }));
+
+      // Preserve the database-derived records for frontend cards.
+      for (const room of out) {
+        const index = rooms.findIndex(
+          (item) => item.room_id === room.room_id,
+        );
+
+        if (index === -1) {
+          rooms.push(room);
+        } else {
+          rooms[index] = room;
+        }
+      }
+
+      // Derive a facility summary from the actual returned rooms.
+      // No facilities are invented or added.
+      const availableFacilities = [
+        ...new Set(
+          out.flatMap((room: any) =>
+            Array.isArray(room.facilities)
+              ? room.facilities.filter(
+                  (f: unknown) => typeof f === "string",
+                )
+              : [],
+          ),
+        ),
+      ];
+
+      console.log("Matching rooms:", out.length);
+      console.log("Available facilities:", availableFacilities);
+      console.log("================================");
+
+      return {
+        rooms: out,
+        total_found: out.length,
+        available_facilities: availableFacilities,
+        checked_at: new Date().toISOString(),
+        message: out.length
+          ? "Matching rooms found."
+          : "No matching available rooms found.",
+      };
+    }
+
+    // ========================================================
+    // GET ROOM DETAILS
+    // ========================================================
+
+    if (name === "get_room_details") {
+
+      const roomId = safeString(a.room_id);
+
+      if (!UUID.test(roomId)) {
+        return { error: "Invalid room ID." };
+      }
+
+      const [bedsResult, takenResult] = await Promise.all([
+        sb
+          .from("beds")
+          .select("id, bed_number")
+          .eq("room_id", roomId)
+          .eq("is_active", true)
+          .order("bed_number"),
+
+        sb.rpc("get_taken_bed_ids", {
+          p_room_id: roomId,
+        }),
+      ]);
+
+      if (bedsResult.error) {
+        console.error("Beds query failed:", bedsResult.error);
+        throw new Error("Could not retrieve beds.");
+      }
+
+      if (takenResult.error) {
+        console.error("Taken beds RPC failed:", takenResult.error);
+        throw new Error("Could not retrieve occupied beds.");
+      }
+
+      const beds = bedsResult.data ?? [];
+      const taken = takenResult.data ?? [];
+
+      const takenIds = new Set<string>(
+        (Array.isArray(taken) ? taken : []).map((item: any) =>
+          typeof item === "string"
+            ? item
+            : String(item?.bed_id ?? item?.id ?? ""),
+        ),
+      );
+
+      const freeBeds = beds
+        .filter((bed: any) => !takenIds.has(bed.id))
+        .map((bed: any) => ({
+          bed_id: bed.id,
+          bed_number: bed.bed_number,
+        }));
+
+      return {
+        room_id: roomId,
+        free_beds: freeBeds,
+        total_free_beds: freeBeds.length,
+        checked_at: new Date().toISOString(),
+      };
+    }
+
+    // ========================================================
+    // PROPOSE BOOKING
+    // ========================================================
+
+    if (name === "propose_booking") {
+
+      const bedId = safeString(a.bed_id);
+
+      if (!UUID.test(bedId)) {
+        return { error: "Invalid bed ID." };
+      }
+
+      const { data, error } = await sb.rpc("create_proposal", {
+        p_bed_id: bedId,
+      });
+
+      if (error) {
+        console.error("create_proposal failed:", error);
+
+        if (
+          String(error.message ?? "").includes("ALREADY_HAS")
+        ) {
+          return {
+            error: "Student already has an active booking.",
+          };
+        }
+
+        return {
+          error: "Bed is not available.",
+        };
+      }
+
+      const proposal = Array.isArray(data) ? data[0] : data;
+
+      if (!proposal?.id || !proposal?.expires_at) {
+        throw new Error("Invalid proposal response.");
+      }
+
+      pending = {
+        proposal_id: proposal.id,
+        expires_at: proposal.expires_at,
+        building_name: proposal.building_name,
+        room_number: proposal.room_number,
+        bed_number: proposal.bed_number,
+      };
+
+      return {
+        proposal_created: true,
+        ...pending,
+        note: "Not a confirmed booking. Student confirmation is required.",
+      };
+    }
+
+    // ========================================================
+    // GET BUILDING DETAILS
+    // ========================================================
+
+    if (name === "get_building_details") {
+      const buildingName = safeString(a.building_name);
+
+      console.log("========== BUILDING DETAILS ==========");
+      console.log("Building name query:", buildingName);
+
+      let query = sb
+        .from("buildings")
+        .select("id, name, description")
+        .eq("is_active", true)
+        .order("name");
+
+      if (buildingName) {
+        query = query.ilike("name", `%${buildingName}%`);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error("get_building_details failed:", error);
+        throw new Error("Could not retrieve building details.");
+      }
+
+      const buildingsList = (data ?? []).map((b: any) => ({
+        id: b.id,
+        name: b.name,
+        description: b.description || "No description available.",
+      }));
+
+      console.log("Matching buildings:", buildingsList.length);
+      console.log("======================================");
+
+      return {
+        buildings: buildingsList,
+        total_found: buildingsList.length,
+        checked_at: new Date().toISOString(),
+        message: buildingsList.length
+          ? "Building details retrieved."
+          : `No active building found matching '${buildingName}'.`,
+      };
+    }
+
+    return { error: "Unknown tool." };
+  }
+
+  // ==========================================================
+  // GEMINI EXECUTION LOOP
+  // ==========================================================
+
+  try {
+
+    for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
+
+      // Force search on the first round for room-search requests.
+      const forceSearch =
+        round === 0 && isRoomSearchRequest(message);
+
+      console.log("Gemini round:", round);
+      console.log("Force search:", forceSearch);
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
+        {
+          method: "POST",
+
+          signal: AbortSignal.timeout(15_000),
+
+          headers: {
+            "Content-Type": "application/json",
+            "x-goog-api-key": GEMINI_API_KEY,
+          },
+
+          body: JSON.stringify({
+
+            systemInstruction: {
+              parts: [{ text: SYSTEM }],
+            },
+
+            contents,
+
+            tools,
+
+            // Main fix: mandatory tool execution.
+            toolConfig: {
+              functionCallingConfig: {
+                mode: forceSearch ? "ANY" : "AUTO",
+
+                ...(forceSearch
+                  ? {
+                      allowedFunctionNames: ["search_rooms"],
+                    }
+                  : {}),
+              },
+            },
+
+            generationConfig: {
+              temperature: 0.2,
+              maxOutputTokens: 1024,
+            },
+          }),
+        },
+      );
+
+      if (!response.ok) {
+        const errorText = await response.text();
+
+        console.error(
+          "Gemini API error:",
+          response.status,
+          errorText.slice(0, 1000),
+        );
+
+        throw new Error(
+          `Gemini API returned ${response.status}.`,
+        );
+      }
+
+      const result = await response.json();
+
+      const candidate = result?.candidates?.[0];
+      const parts = candidate?.content?.parts ?? [];
+
+      if (!Array.isArray(parts)) {
+        throw new Error("Invalid Gemini response.");
+      }
+
+      const calls = parts.filter(
+        (p: any) => p?.functionCall,
+      );
+
+      // --------------------------------------------------------
+      // VERIFY MANDATORY SEARCH
+      // --------------------------------------------------------
+
+      if (forceSearch && calls.length === 0) {
+        console.error(
+          "Gemini did not return a mandatory search function call.",
+        );
+
+        return json({
+          reply:
+            "I couldn't start the room search. Please try again.",
+          rooms: [],
+          pending_action: null,
+          search_status: "failed",
+        });
+      }
+
+      // --------------------------------------------------------
+      // FINAL RESPONSE
+      // --------------------------------------------------------
+
+      if (calls.length === 0) {
+
+        if (searchFailed) {
+          return json({
+            reply:
+              "I couldn't verify room availability right now. Please try again.",
+            rooms: [],
+            pending_action: null,
+            search_status: "failed",
+          });
+        }
+
+        const reply = parts
+          .map((p: any) => p.text ?? "")
+          .join("")
+          .trim();
+
+        return json({
+          reply:
+            reply ||
+            "I could not complete that request. Please try again.",
+          rooms,
+          pending_action: pending,
+          ...(searchExecuted
+            ? { search_status: "success" }
+            : {}),
+        });
+      }
+
+      // --------------------------------------------------------
+      // ADD MODEL TOOL CALLS TO CONVERSATION
+      // --------------------------------------------------------
+
+      contents.push({
+        role: "model",
+        parts,
+      });
+
+      const toolResponses: any[] = [];
+
+      for (const call of calls) {
+
+        const name = call.functionCall.name;
+        const args = call.functionCall.args ?? {};
+
+        console.log("Executing tool:", name);
+        console.log("Arguments:", JSON.stringify(args));
+
+        let toolResult: unknown;
+
+        try {
+          toolResult = await runTool(name, args);
+
+          if (
+            isObject(toolResult) &&
+            "error" in toolResult
+          ) {
+            if (name === "search_rooms") {
+              searchFailed = true;
+            }
+          }
+
+        } catch (error) {
+
+          console.error(`Tool ${name} failed:`, error);
+
+          if (name === "search_rooms") {
+            searchFailed = true;
+          }
+
+          toolResult = {
+            error: "TOOL_EXECUTION_FAILED",
+            message: "Availability could not be verified.",
+          };
+        }
+
+        toolResponses.push({
+          functionResponse: {
+            name,
+            ...(call.functionCall.id
+              ? { id: call.functionCall.id }
+              : {}),
+            response: {
+              result: toolResult,
+            },
+          },
+        });
+      }
+
+      // Do not let Gemini generate a misleading response
+      // after a failed search.
+      if (searchFailed) {
+        return json({
+          reply:
+            "I couldn't verify room availability right now. Please try again.",
+          rooms: [],
+          pending_action: null,
+          search_status: "failed",
+        });
+      }
+
+      contents.push({
+        role: "user",
+        parts: toolResponses,
+      });
+    }
+
+    // ----------------------------------------------------------
+    // MAXIMUM TOOL ROUNDS
+    // ----------------------------------------------------------
+
+    return json({
+      reply:
+        "I couldn't complete your request within the allowed steps. Please try again.",
+      rooms,
+      pending_action: pending,
+      search_status: searchExecuted ? "success" : "failed",
+    });
+
+  } catch (error) {
+
+    console.error("ai-chat failed:", error);
+
+    return err(
+      503,
+      "AI_UNAVAILABLE",
+      "The assistant is temporarily unavailable. You can still browse rooms manually.",
+    );
   }
 });
