@@ -17,6 +17,9 @@ export default function Rooms() {
   const [open, setOpen] = useState<Row | null>(null);
   const [beds, setBeds] = useState<Bed[]>([]);
   const [busy, setBusy] = useState(false);
+  const [groupMode, setGroupMode] = useState(false);
+  const [inviteStudentNumber, setInviteStudentNumber] = useState("");
+  const [inviteEmail, setInviteEmail] = useState("");
 
   async function load() {
     setErr("");
@@ -37,6 +40,25 @@ export default function Rooms() {
   }
 
   async function book(b: Bed) {
+    if (groupMode) {
+      if (!inviteStudentNumber.trim() || !inviteEmail.trim()) {
+        return setErr("Enter the student's student number and email before sending the invitation.");
+      }
+      setBusy(true); setErr("");
+      const { error } = await supabase.rpc("create_booking_invite", {
+        p_bed_id: b.id,
+        p_student_number: inviteStudentNumber.trim(),
+        p_email: inviteEmail.trim(),
+      });
+      setBusy(false);
+      if (error) return setErr(friendly(error));
+      setMsg("Invitation sent. The student must accept it before the booking is created.");
+      setOpen(null);
+      setGroupMode(false);
+      setInviteStudentNumber("");
+      setInviteEmail("");
+      return;
+    }
     if (!confirm(`Book bed ${b.bed_number} in ${open!.building_name} room ${open!.room_number}?`)) return;
     setBusy(true); setErr("");
     const { data, error } = await supabase.rpc("create_booking", { p_bed_id: b.id, p_source: "manual" });
@@ -117,11 +139,13 @@ export default function Rooms() {
       ) : (
         <>
           <div className="section-heading">
+            <button className="btn-ghost btn-sm rooms-back-button" onClick={() => setBuilding("")}>
+              <span aria-hidden="true">←</span> All buildings
+            </button>
             <div>
               <p className="section-label">{building}</p>
               <p className="section-heading__hint">Available rooms in this building.</p>
             </div>
-            <button className="btn-ghost btn-sm" onClick={() => setBuilding("")}>All buildings</button>
           </div>
           {shown.length === 0 && !err && (
             <p className="state">No rooms are available right now.</p>
@@ -129,6 +153,7 @@ export default function Rooms() {
           <ul className="grid" style={{ listStyle: "none", padding: 0 }}>
             {shown.map((r) => (
               <li key={r.room_id} className="room-card">
+                <img className="room-card__image" src="/rooms/room-interior.png" alt={`Room ${r.room_number} interior`} />
                 <div className="room-card__body">
                   <div>
                     <div className="room-card__title">Room {r.room_number}</div>
@@ -158,6 +183,17 @@ export default function Rooms() {
               {open.building_name} — Room {open.room_number}
             </p>
             <div style={{ height: 1, background: "var(--line)" }} />
+            <label className="group-booking-toggle">
+              <input type="checkbox" checked={groupMode} onChange={(e) => setGroupMode(e.target.checked)} />
+              Book for another student
+            </label>
+            {groupMode && (
+              <div className="group-booking-fields">
+                <label>Student number<input value={inviteStudentNumber} onChange={(e) => setInviteStudentNumber(e.target.value)} placeholder="e.g. 12001234" /></label>
+                <label>Email<input type="email" value={inviteEmail} onChange={(e) => setInviteEmail(e.target.value)} placeholder="student@example.com" /></label>
+                <p className="state">The student will receive an invitation and must confirm it.</p>
+              </div>
+            )}
             <div className="modal__actions">
               {beds.map((b) => (
                 <button key={b.id} disabled={busy} onClick={() => book(b)} className="btn-outline">

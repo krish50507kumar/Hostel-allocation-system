@@ -99,36 +99,41 @@ BOOKING RULES:
 
 20. Never claim that a booking exists until it is confirmed.
 
+21. Only create a proposal when the student's original message explicitly
+    asks to book, reserve, make a booking, or get a booking proposal.
+    A request to show, find, compare, or list rooms must only return rooms
+    and must never ask for booking confirmation.
+
 PRIVACY:
 
-21. Never reveal other students' personal information.
+22. Never reveal other students' personal information.
 
 RESPONSE STYLE:
 
-22. Give direct, concise and useful answers.
+23. Give direct, concise and useful answers.
 
-23. Do not unnecessarily repeat room information.
+24. Do not unnecessarily repeat room information.
 
-24. If information is missing, say you cannot verify it.
+25. If information is missing, say you cannot verify it.
 
-25. Ask clarifying questions when necessary.
+26. Ask clarifying questions when necessary.
 
 BUILDING RULES:
 
-26. Use get_building_details ONLY when a student asks about a building,
+27. Use get_building_details ONLY when a student asks about a building,
     building descriptions, campus locations or building overviews.
 
-27. Do not call get_building_details when the student is only searching
+28. Do not call get_building_details when the student is only searching
     for available rooms, beds or facilities (use search_rooms instead).
 
-28. Use only the name and description returned by get_building_details.
+29. Use only the name and description returned by get_building_details.
     Never invent building details or amenities not present in the database.
 
 CAMPUS CONTEXT:
-29. The current campus context may include map locations, selected destinations,
+30. The current campus context may include map locations, selected destinations,
     visits per week, and weekly distance recommendations. Use it when the
     student asks about their profile, campus map, destinations, or commute.
-30. Treat image values as frontend image references only. Do not describe image
+31. Treat image values as frontend image references only. Do not describe image
     contents unless visual image data is explicitly provided.
 `;
 
@@ -418,6 +423,11 @@ function isRoomSearchRequest(message: string): boolean {
   ];
 
   return patterns.some((pattern) => pattern.test(text));
+}
+
+function isBookingRequest(message: string): boolean {
+  const text = message.toLowerCase();
+  return /\b(book|booking|reserve|reservation|proposal|confirm)\b/.test(text);
 }
 
 // ------------------------------------------------------------
@@ -945,6 +955,7 @@ ${JSON.stringify(campusContext)}`,
   // ==========================================================
 
   try {
+    const bookingRequested = isBookingRequest(message);
 
     for (let round = 0; round <= MAX_TOOL_ROUNDS; round++) {
 
@@ -954,6 +965,7 @@ ${JSON.stringify(campusContext)}`,
 
       console.log("Gemini round:", round);
       console.log("Force search:", forceSearch);
+      console.log("Booking requested:", bookingRequested);
 
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`,
@@ -975,7 +987,13 @@ ${JSON.stringify(campusContext)}`,
 
             contents,
 
-            tools,
+            tools: bookingRequested
+              ? tools
+              : [{
+                functionDeclarations: tools[0].functionDeclarations.filter(
+                  (tool) => tool.name !== "propose_booking",
+                ),
+              }],
 
             // Main fix: mandatory tool execution.
             toolConfig: {

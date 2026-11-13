@@ -21,6 +21,7 @@ type Recommendation = {
   walkingMinutes: number;
   matchedPlaces: number;
   weeklyVisits: number;
+  destinations: { place: Place; distance: number; minutes: number; visits: number }[];
 };
 type MapPoint = {
   id: string;
@@ -109,7 +110,13 @@ function routeDistance(building: Building, place: Place, routes: Route[], nodes:
 }
 
 function bestBuilding(placeIds: string[], buildings: Building[], places: Place[], routes: Route[], visits: Visit[]): Recommendation | null {
-  if (!placeIds.length) return null;
+  const candidates = buildingRecommendations(placeIds, buildings, places, routes, visits);
+  if (!candidates.some((candidate) => candidate.matchedPlaces > 0)) return null;
+  return candidates.find((candidate) => candidate.matchedPlaces === placeIds.length) ?? candidates[0] ?? null;
+}
+
+function buildingRecommendations(placeIds: string[], buildings: Building[], places: Place[], routes: Route[], visits: Visit[]): Recommendation[] {
+  if (!placeIds.length) return [];
   const nodes = [
     ...buildings.filter((building) => building.latitude != null && building.longitude != null)
       .map((building) => ({ id: `building:${building.id}`, coordinate: { latitude: building.latitude!, longitude: building.longitude! } })),
@@ -120,8 +127,9 @@ function bestBuilding(placeIds: string[], buildings: Building[], places: Place[]
     const destinations = placeIds.map((placeId) => {
       const place = places.find((item) => item.id === placeId);
       const visit = visits.find((item) => item.place_id === placeId);
-      return place ? { route: routeDistance(building, place, routes, nodes), visits: visit?.visits_per_week ?? 1 } : null;
-    }).filter((item): item is { route: { distance: number; minutes: number }; visits: number } => item?.route != null);
+      const route = place ? routeDistance(building, place, routes, nodes) : null;
+      return place && route ? { place, route, visits: visit?.visits_per_week ?? 1 } : null;
+    }).filter((item): item is { place: Place; route: { distance: number; minutes: number }; visits: number } => item != null);
     const weeklyVisits = destinations.reduce((sum, item) => sum + item.visits, 0);
     const totalDistance = destinations.reduce((sum, item) => sum + 2 * item.visits * item.route.distance, 0);
     const walkingMinutes = destinations.reduce((sum, item) => sum + 2 * item.visits * item.route.minutes, 0);
@@ -132,10 +140,15 @@ function bestBuilding(placeIds: string[], buildings: Building[], places: Place[]
       walkingMinutes,
       matchedPlaces: destinations.length,
       weeklyVisits,
+      destinations: destinations.map((item) => ({
+        place: item.place,
+        distance: item.route.distance,
+        minutes: item.route.minutes,
+        visits: item.visits,
+      })),
     };
   }).sort((a, b) => b.matchedPlaces - a.matchedPlaces || a.totalDistance - b.totalDistance);
-  if (!candidates.some((candidate) => candidate.matchedPlaces > 0)) return null;
-  return candidates.find((candidate) => candidate.matchedPlaces === placeIds.length) ?? candidates[0] ?? null;
+  return candidates;
 }
 
 export default function Profile() {
@@ -177,6 +190,16 @@ export default function Profile() {
       selected: selected.includes(place.id),
     })),
   ], [buildings, places, selected]);
+  const comparisons = useMemo(
+    () => buildingRecommendations(
+      selected,
+      buildings,
+      places,
+      routes,
+      selected.map((place_id) => ({ place_id, visits_per_week: frequencyByPlace[place_id] ?? 1 })),
+    ).filter((item) => item.matchedPlaces > 0),
+    [selected, buildings, places, routes, frequencyByPlace],
+  );
 
   useEffect(() => {
     async function load() {
@@ -298,7 +321,7 @@ export default function Profile() {
         <div className="page-hero__pattern" /><div className="page-hero__pattern2" />
         <div className="page-hero__text">
           <div className="page-hero__eyebrow">Student profile</div>
-          <h1>Campus preferences</h1>
+          <h1>Preference</h1>
           <p>Tell us where you spend time on campus so we can recommend the most convenient hostel building.</p>
         </div>
       </div>
@@ -354,7 +377,7 @@ export default function Profile() {
           </div>
           {groupedPlaces.length === 0 && <p className="state">No campus places have been configured yet.</p>}
           {groupedPlaces.map((group) => (
-            <fieldset className="profile-place-group" key={group.title}>
+            <fieldset className={`profile-place-group ${group.title === "Classes" ? "profile-place-group--classes" : ""}`} key={group.title}>
               <legend>{group.title}</legend>
               <p>{group.hint}</p>
               <div className="profile-place-options">
@@ -386,6 +409,7 @@ export default function Profile() {
           </button>
         </div>
 
+        <div className="profile-result-column">
         <aside className="profile-result">
           {recommendation ? (
             <>
@@ -407,7 +431,73 @@ export default function Profile() {
             </div>
           )}
         </aside>
+        {comparisons.length > 0 && (
+          <div className="preference-analysis__summary">
+            <div className="card-pad preference-comparison">
+              <div>
+                <h2>Compare your weekly walking</h2>
+                <p>Less distance means more time for everything else.</p>
+              </div>
+              <div className="preference-bars">
+                {comparisons.slice(0, 5).map((item, index) => {
+                  const maxDistance = Math.max(...comparisons.map((comparison) => comparison.totalDistance), 1);
+                  const distanceKm = item.totalDistance / 1000;
+                  return (
+                    <div className="preference-bar-row" key={item.building.id}>
+                      <strong>{item.building.name}</strong>
+                      <div className="preference-bar-track">
+                        <span className={index === 0 ? "best" : ""} style={{ width: `${Math.max(8, distanceKm / (maxDistance / 1000) * 100)}%` }} />
+                      </div>
+                      <span className="preference-bar-value">
+                        {distanceKm.toFixed(1)} km
+                        <small>{index === 0 ? "Best fit" : `+${(distanceKm - comparisons[0].totalDistance / 1000).toFixed(1)} km`}</small>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="preference-bar-scale"><span>0</span><span>{Math.round((comparisons[0].totalDistance / 1000) / 2)} km</span><span>{Math.ceil(comparisons[comparisons.length - 1].totalDistance / 1000)} km</span></div>
+            </div>
+
+            <aside className="preference-why">
+              <h2>Why {comparisons[0].building.name} comes first</h2>
+              <ol>
+                <li><strong>{comparisons[0].matchedPlaces} of {selected.length} destinations are reachable</strong><span>Your selected places are included in the comparison.</span></li>
+                <li><strong>{comparisons[0].walkingMinutes} minutes of walking per week</strong><span>Calculated from saved routes and your visit frequency.</span></li>
+                <li><strong>{(comparisons[0].totalDistance / 1000).toFixed(1)} km weekly round trip</strong><span>The shortest result among the available matches.</span></li>
+              </ol>
+            </aside>
+          </div>
+        )}
+        </div>
       </div>
+
+      {comparisons.length > 0 && (
+        <section className="preference-analysis">
+          <div className="card-pad preference-routes">
+            <h2>Your route-by-route breakdown</h2>
+            <p>From {comparisons[0].building.name} · Walking routes, not straight-line distances</p>
+            <div className="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Destination</th><th>One-way route</th><th>Walking time</th><th>Visits / week</th><th>Weekly return distance</th></tr>
+                </thead>
+                <tbody>
+                  {comparisons[0].destinations.map((destination) => (
+                    <tr key={destination.place.id}>
+                      <td>{destination.place.name}</td>
+                      <td>{destination.distance >= 1000 ? `${(destination.distance / 1000).toFixed(1)} km` : `${Math.round(destination.distance)} m`}</td>
+                      <td>{destination.minutes} min</td>
+                      <td>{destination.visits}</td>
+                      <td className="preference-routes__total">{(2 * destination.visits * destination.distance / 1000).toFixed(1)} km</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+      )}
     </section>
   );
 }

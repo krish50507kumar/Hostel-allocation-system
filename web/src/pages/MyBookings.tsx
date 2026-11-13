@@ -7,24 +7,43 @@ type B = {
   booked_at: string;
   beds: { bed_number: string; rooms: { room_number: string; buildings: { name: string } } };
 };
+type Invite = {
+  id: string;
+  created_at: string;
+  expires_at: string;
+  beds: { bed_number: string; rooms: { room_number: string; buildings: { name: string } } };
+};
 type S = { college_start_date: string; cancellation_days_before_start: number; timezone: string };
+
+function formatDate(date: string): string {
+  const [year, month, day] = date.split("-");
+  return `${day}/${month}/${year}`;
+}
 
 export default function MyBookings() {
   const [rows, setRows] = useState<B[] | null>(null);
+  const [invites, setInvites] = useState<Invite[]>([]);
   const [s, setS] = useState<S | null>(null);
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
 
   async function load() {
-    const [b, st] = await Promise.all([
+    const [b, st, i] = await Promise.all([
       supabase
         .from("bookings")
         .select("id, booking_reference, status, booked_at, beds(bed_number, rooms(room_number, buildings(name)))")
         .order("booked_at", { ascending: false }),
       supabase.from("app_settings").select("*").single(),
+      supabase
+        .from("booking_invites")
+        .select("id, created_at, expires_at, beds(bed_number, rooms(room_number, buildings(name)))")
+        .eq("status", "pending")
+        .order("created_at", { ascending: false }),
     ]);
     if (b.error) return setErr(friendly(b.error));
+    if (i.error) return setErr(friendly(i.error));
     setRows(b.data as unknown as B[]);
+    setInvites((i.data ?? []) as unknown as Invite[]);
     setS(st.data as S);
   }
 
@@ -40,6 +59,20 @@ export default function MyBookings() {
     const { error } = await supabase.rpc("cancel_booking", { p_booking_id: id, p_reason: "Cancelled by student" });
     if (error) return setErr(friendly(error));
     setErr(""); setMsg("Booking cancelled."); load();
+  }
+
+  async function respondToInvite(id: string, action: "accept" | "decline") {
+    if (action === "accept" && !confirm("Accept this group booking invitation?")) return;
+    const { data, error } = await supabase.rpc(
+      action === "accept" ? "accept_booking_invite" : "decline_booking_invite",
+      { p_invite_id: id },
+    );
+    if (error) return setErr(friendly(error));
+    setErr("");
+    setMsg(action === "accept"
+      ? `Group booking accepted. Your reference is ${(data as { booking_reference: string }).booking_reference}.`
+      : "Group booking invitation declined.");
+    load();
   }
 
   if (!rows && !err) return (
@@ -70,13 +103,39 @@ export default function MyBookings() {
         </div>
       </div>
 
-      {s && cutoff && (
+      {s && cutoff && active.length > 0 && (
         <div className="alert alert-info" style={{ marginBottom: 20 }}>
-          Cancellation is allowed until <strong>{cutoff}</strong> ({s.timezone}). After that date, cancellations are blocked.
+          Cancellation is allowed until <strong>{formatDate(cutoff)}</strong>. After that date, cancellations are blocked.
         </div>
       )}
       {msg && <div className="alert alert-success" role="status" style={{ marginBottom: 16 }}>{msg}</div>}
       {err && <div className="alert alert-error" role="alert" style={{ marginBottom: 16 }}>{err}</div>}
+
+      {invites.length > 0 && (
+        <>
+          <p className="section-label">Group booking invitations</p>
+          <ul className="grid" style={{ marginBottom: 28, listStyle: "none", padding: 0 }}>
+            {invites.map((invite) => (
+              <li key={invite.id} className="booking-card">
+                <div className="booking-card__accent" />
+                <div className="booking-card__body">
+                  <span className="badge active">Awaiting your confirmation</span>
+                  <p style={{ fontSize: ".88rem", fontWeight: 600, color: "var(--fg-2)", margin: 0 }}>
+                    {invite.beds.rooms.buildings.name} — Room {invite.beds.rooms.room_number} — Bed {invite.beds.bed_number}
+                  </p>
+                  <p style={{ fontSize: ".8rem", color: "var(--muted)", margin: 0 }}>
+                    This bed will be booked for you only after you accept.
+                  </p>
+                  <div className="booking-invite-actions">
+                    <button className="btn-sm" onClick={() => respondToInvite(invite.id, "accept")}>Accept invitation</button>
+                    <button className="btn-ghost btn-sm" onClick={() => respondToInvite(invite.id, "decline")}>Decline</button>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
 
       {rows?.length === 0 && (
         <p className="state">You have no bookings yet.</p>

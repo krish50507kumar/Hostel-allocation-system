@@ -8,6 +8,14 @@ const MESSAGES: Record<string, string> = {
   CAPACITY_BELOW_OCCUPIED: "Capacity cannot be lower than the number of occupied beds.",
   FORBIDDEN: "You do not have permission to do that.",
   UNAUTHENTICATED: "Your session expired. Please sign in again.",
+  INVITEE_DETAILS_REQUIRED: "Enter the invited student's student number and email.",
+  INVITEE_NOT_FOUND: "No student matched that student number and email.",
+  INVITEE_ALREADY_BOOKED: "That student already has an active booking.",
+  GROUP_INVITE_LIMIT: "The maximum group size has been reached for this room's available beds.",
+  INVITE_ALREADY_SENT: "An invitation for this student and bed is already pending.",
+  CANNOT_INVITE_SELF: "You cannot send a group invitation to yourself.",
+  INVITE_EXPIRED: "This group booking invitation has expired or the bed is no longer available.",
+  INVITE_NOT_FOUND: "This group booking invitation is no longer available.",
 };
 export function friendly(err: { message?: string } | null): string {
   if (err) console.error("Supabase error:", err); // real cause is visible in the browser console (F12)

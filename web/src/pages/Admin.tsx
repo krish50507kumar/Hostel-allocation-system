@@ -160,15 +160,6 @@ export default function Admin() {
 
   return (
     <section>
-      <div className="page-hero">
-        <div className="page-hero__pattern" /><div className="page-hero__pattern2" />
-        <div className="page-hero__text">
-          <div className="page-hero__eyebrow">Admin</div>
-          <h1>Dashboard</h1>
-          <p>Manage buildings, rooms, and monitor occupancy across the hostel.</p>
-        </div>
-      </div>
-
       {msg && <div className="alert alert-success" role="status" style={{ marginBottom: 20 }}>{msg}</div>}
       {err && <div className="alert alert-error" role="alert" style={{ marginBottom: 20 }}>{err}</div>}
 
@@ -209,9 +200,16 @@ export default function Admin() {
         </>
       )}
 
-      <div className="admin-section">
-        <p className="section-label">Create inventory</p>
-        <div className="admin-create-grid">
+      <details className="admin-section admin-dropdown">
+        <summary className="admin-dropdown__summary">
+          <span>
+            <span className="section-label">Create inventory</span>
+            <span className="admin-dropdown__hint">Add a building or room to the hostel inventory.</span>
+          </span>
+          <span className="admin-dropdown__chevron" aria-hidden="true">⌄</span>
+        </summary>
+        <div className="admin-dropdown__content">
+          <div className="admin-create-grid">
           <form className="card-pad form-card" onSubmit={addBuilding}>
             <h2>New building</h2>
             <div className="form-group">
@@ -249,12 +247,20 @@ export default function Admin() {
               <button type="submit" style={{ alignSelf: "flex-start" }}>Create room</button>
             </div>
           </form>
+          </div>
         </div>
-      </div>
+      </details>
 
-      <div className="admin-section">
-        <p className="section-label">Campus places</p>
-        <div className="admin-create-grid">
+      <details className="admin-section admin-dropdown">
+        <summary className="admin-dropdown__summary">
+          <span>
+            <span className="section-label">Campus places</span>
+            <span className="admin-dropdown__hint">Add or edit class buildings, libraries, and messes.</span>
+          </span>
+          <span className="admin-dropdown__chevron" aria-hidden="true">⌄</span>
+        </summary>
+        <div className="admin-dropdown__content">
+          <div className="admin-create-grid">
           <form className="card-pad form-card" onSubmit={(e) => { e.preventDefault(); savePlace({ id: null, ...place }); }}>
             <h2>Add class building, library or mess</h2>
             <div className="form-group">
@@ -293,15 +299,23 @@ export default function Admin() {
               </div>
             ))}
           </div>
+          </div>
         </div>
-      </div>
+      </details>
 
-      <div className="admin-section">
-        <div className="section-heading">
-          <div><p className="section-label">Master inventory control</p><p className="section-heading__hint">Edit any building or active room directly from this dashboard.</p></div>
-          <span className="section-heading__count">{blds.length} building{blds.length !== 1 ? "s" : ""}</span>
-        </div>
-        <div className="admin-inventory">
+      <details className="admin-section admin-dropdown">
+        <summary className="admin-dropdown__summary">
+          <span>
+            <span className="section-label">Master inventory control</span>
+            <span className="admin-dropdown__hint">Edit any building or active room directly from this dashboard.</span>
+          </span>
+          <span className="admin-dropdown__meta">
+            <span className="section-heading__count">{blds.length} building{blds.length !== 1 ? "s" : ""}</span>
+            <span className="admin-dropdown__chevron" aria-hidden="true">⌄</span>
+          </span>
+        </summary>
+        <div className="admin-dropdown__content">
+          <div className="admin-inventory">
           {blds.map((b) => (
             <div className="admin-inventory__building" key={b.id}>
               {editingBuilding === b.id ? (
@@ -349,11 +363,12 @@ export default function Admin() {
                   </div>
                 ))}
                 {!rooms.some((room) => room.building_id === b.id) && <p className="state">No active rooms in this building.</p>}
+                </div>
               </div>
-            </div>
           ))}
+          </div>
         </div>
-      </div>
+      </details>
     </section>
   );
 }

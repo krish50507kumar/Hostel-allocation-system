@@ -8,6 +8,7 @@ type Room = {
   available_beds: number; active_beds?: number;
   checked_at: string; evidence: string[];
 };
+type Bed = { id: string; bed_number: string };
 type Pending = {
   proposal_id: string; building_name: string; room_number: string;
   bed_number: string; expires_at: string;
@@ -26,12 +27,16 @@ export default function AIAssistant() {
   const [busy, setBusy]       = useState(false);
   const [rooms, setRooms]     = useState<Room[]>([]);
   const [pending, setPending] = useState<Pending | null>(null);
+  const [selectedRoom, setSelectedRoom] = useState<Room | null>(null);
+  const [beds, setBeds] = useState<Bed[]>([]);
+  const [bedsBusy, setBedsBusy] = useState(false);
   const [err, setErr]         = useState("");
   const [ok, setOk]           = useState("");
 
   async function send(text: string) {
     if (!text.trim() || busy) return;
     setBusy(true); setErr(""); setOk(""); setPending(null);
+    setSelectedRoom(null);
     setMsgs((m) => [...m, { role: "user", text }]);
     setInput("");
     const { data, error } = await supabase.functions.invoke("ai-chat", {
@@ -48,7 +53,7 @@ export default function AIAssistant() {
     setPending(data.pending_action ?? null);
   }
 
-  async function confirm() {
+  async function confirmProposal() {
     if (!pending) return;
     setBusy(true);
     const { data, error } = await supabase.rpc("confirm_proposal", { p_proposal_id: pending.proposal_id });
@@ -61,6 +66,41 @@ export default function AIAssistant() {
     }
     setOk(`Booked! Your reference is ${(data as { booking_reference: string }).booking_reference}.`);
     setPending(null); setRooms([]);
+  }
+
+  async function pickRoom(room: Room) {
+    setSelectedRoom(room);
+    setBeds([]);
+    setErr("");
+    setBedsBusy(true);
+    const [allResult, takenResult] = await Promise.all([
+      supabase.from("beds").select("id, bed_number").eq("room_id", room.room_id).eq("is_active", true).order("bed_number"),
+      supabase.rpc("get_taken_bed_ids", { p_room_id: room.room_id }),
+    ]);
+    setBedsBusy(false);
+    if (allResult.error || takenResult.error) {
+      setSelectedRoom(null);
+      return setErr(friendly(allResult.error ?? takenResult.error));
+    }
+    const taken = new Set((takenResult.data ?? []) as string[]);
+    setBeds(((allResult.data ?? []) as Bed[]).filter((bed) => !taken.has(bed.id)));
+  }
+
+  async function bookBed(bed: Bed) {
+    if (!selectedRoom) return;
+    if (!window.confirm(`Book bed ${bed.bed_number} in ${selectedRoom.building_name} room ${selectedRoom.room_number}?`)) return;
+    setBusy(true);
+    setErr("");
+    const { data, error } = await supabase.rpc("create_booking", { p_bed_id: bed.id, p_source: "manual" });
+    setBusy(false);
+    if (error) {
+      setSelectedRoom(null);
+      setErr(friendly(error));
+      return;
+    }
+    setOk(`Booked! Your reference is ${(data as { booking_reference: string }).booking_reference}.`);
+    setSelectedRoom(null);
+    setRooms((current) => current.filter((room) => room.room_id !== selectedRoom.room_id));
   }
 
   return (
@@ -147,7 +187,8 @@ export default function AIAssistant() {
             <p className="section-label">Rooms matching your search</p>
             <ul className="grid" style={{ listStyle: "none", padding: 0 }}>
               {rooms.map((r) => (
-                <li key={r.room_id} className="room-card">
+                <li key={r.room_id} className="room-card" role="button" tabIndex={0} onClick={() => pickRoom(r)} onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") pickRoom(r); }}>
+                  <img className="room-card__image" src="/rooms/room-interior.png" alt={`Room ${r.room_number} interior`} />
                   <div className="room-card__body">
                     <div>
                       <div className="room-card__title">Room {r.room_number}</div>
@@ -158,6 +199,9 @@ export default function AIAssistant() {
                     <p className="state" style={{ fontSize: ".78rem", margin: 0 }}>
                       Verified {new Date(r.checked_at).toLocaleTimeString()}
                     </p>
+                    <button type="button" onClick={(e) => { e.stopPropagation(); pickRoom(r); }} style={{ marginTop: 6, alignSelf: "flex-start" }}>
+                      Choose a bed
+                    </button>
                   </div>
                 </li>
               ))}
@@ -176,8 +220,34 @@ export default function AIAssistant() {
               Proposal reserved until {new Date(pending.expires_at).toLocaleTimeString()}.
             </p>
             <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 4 }}>
-              <button disabled={busy} onClick={confirm}>Confirm booking</button>
+              <button disabled={busy} onClick={confirmProposal}>Confirm booking</button>
               <button className="btn-ghost" onClick={() => setPending(null)}>Dismiss</button>
+            </div>
+          </div>
+        )}
+
+        {selectedRoom && (
+          <div className="modal-overlay" onClick={(e) => { if (e.target === e.currentTarget) setSelectedRoom(null); }}>
+            <div className="modal" role="dialog" aria-label="Choose a bed">
+              <div className="modal__header">
+                <span className="modal__title">Pick a bed</span>
+                <button type="button" className="btn-ghost btn-sm" onClick={() => setSelectedRoom(null)}>Close</button>
+              </div>
+              <p style={{ fontSize: ".9rem", color: "var(--muted)", margin: 0 }}>
+                {selectedRoom.building_name} — Room {selectedRoom.room_number}
+              </p>
+              <div style={{ height: 1, background: "var(--line)" }} />
+              <div className="modal__actions">
+                {bedsBusy && <p className="state">Loading free beds…</p>}
+                {!bedsBusy && beds.map((bed) => (
+                  <button key={bed.id} type="button" disabled={busy} onClick={() => bookBed(bed)} className="btn-outline">
+                    Bed {bed.bed_number}
+                  </button>
+                ))}
+                {!bedsBusy && beds.length === 0 && (
+                  <p className="state">No beds free. Refresh and choose another room.</p>
+                )}
+              </div>
             </div>
           </div>
         )}

@@ -48,12 +48,15 @@ export default function App() {
     );
   }
 
+  const isAdmin = me?.role === "admin";
+  const homePath = isAdmin ? "/admin" : "/student/rooms";
+
   return (
     <div className="app-shell">
       {me && (
         <header className="topnav">
           <div className="topnav__inner">
-            <NavLink to="/student/rooms" className="topnav__brand" onClick={() => setMenuOpen(false)}>
+            <NavLink to={homePath} className="topnav__brand" onClick={() => setMenuOpen(false)}>
               <span className="topnav__brand-icon" aria-hidden="true">H</span>
               <span>HostelHub</span>
             </NavLink>
@@ -77,39 +80,43 @@ export default function App() {
             {/* Main navigation (all links grouped together on left) */}
             <div className={`topnav__menu ${menuOpen ? "open" : ""}`}>
               <nav className="topnav__links">
-                <NavLink
-                  to="/student/rooms"
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
-                >
-                  Rooms
-                </NavLink>
-                <NavLink
-                  to="/student/ai-assistant"
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
-                >
-                  AI Assistant
-                </NavLink>
-                <NavLink
-                  to="/student/bookings"
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
-                >
-                  My Bookings
-                </NavLink>
-                <NavLink
-                  to="/student/profile"
-                  onClick={() => setMenuOpen(false)}
-                  className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
-                >
-                  Profile
-                </NavLink>
-                {me.role === "admin" && (
+                {!isAdmin ? (
+                  <>
+                    <NavLink
+                      to="/student/rooms"
+                      onClick={() => setMenuOpen(false)}
+                      className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
+                    >
+                      Rooms
+                    </NavLink>
+                    <NavLink
+                      to="/student/ai-assistant"
+                      onClick={() => setMenuOpen(false)}
+                      className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
+                    >
+                      AI Assistant
+                    </NavLink>
+                    <NavLink
+                      to="/student/bookings"
+                      onClick={() => setMenuOpen(false)}
+                      className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
+                    >
+                      My Bookings
+                    </NavLink>
+                    <NavLink
+                      to="/student/profile"
+                      onClick={() => setMenuOpen(false)}
+                      className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
+                    >
+                      Preference
+                    </NavLink>
+                  </>
+                ) : (
                   <>
                     <span className="topnav__divider" aria-hidden="true" />
                     <NavLink
                       to="/admin"
+                      end
                       onClick={() => setMenuOpen(false)}
                       className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
                     >
@@ -157,19 +164,19 @@ export default function App() {
       <main className={me ? "page-content" : ""}>
         <Routes>
           <Route path="/login" element={<Login onDone={load} />} />
-          <Route path="/student/rooms" element={me ? <Rooms /> : <Navigate to="/login" />} />
-          <Route path="/student/ai-assistant" element={me ? <AIAssistant /> : <Navigate to="/login" />} />
-          <Route path="/student/bookings" element={me ? <MyBookings /> : <Navigate to="/login" />} />
-          <Route path="/student/profile" element={me ? <Profile /> : <Navigate to="/login" />} />
+          <Route path="/student/rooms" element={me && !isAdmin ? <Rooms /> : <Navigate to={me ? homePath : "/login"} />} />
+          <Route path="/student/ai-assistant" element={me && !isAdmin ? <AIAssistant /> : <Navigate to={me ? homePath : "/login"} />} />
+          <Route path="/student/bookings" element={me && !isAdmin ? <MyBookings /> : <Navigate to={me ? homePath : "/login"} />} />
+          <Route path="/student/profile" element={me && !isAdmin ? <Profile /> : <Navigate to={me ? homePath : "/login"} />} />
           <Route path="/admin" element={me?.role === "admin" ? <Admin /> : <Navigate to="/login" />} />
           <Route path="/admin/bookings" element={me?.role === "admin" ? <AdminBookings /> : <Navigate to="/login" />} />
           <Route path="/admin/settings" element={me?.role === "admin" ? <AdminSettings /> : <Navigate to="/login" />} />
-          <Route path="*" element={<Navigate to={me ? "/student/rooms" : "/login"} />} />
+          <Route path="*" element={<Navigate to={me ? homePath : "/login"} />} />
         </Routes>
       </main>
 
       {/* Mobile Bottom Quick Navigation Bar on phones */}
-      {me && (
+      {me && !isAdmin && (
         <nav className="bottom-bar" aria-label="Mobile quick navigation">
           <NavLink
             to="/student/rooms"
@@ -207,22 +214,6 @@ export default function App() {
             </svg>
             <span>Bookings</span>
           </NavLink>
-
-          {me.role === "admin" && (
-            <NavLink
-              to="/admin"
-              className={({ isActive }) => "bottom-bar__item" + (isActive ? " active" : "")}
-              onClick={() => setMenuOpen(false)}
-            >
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <rect x="3" y="3" width="7" height="7" />
-                <rect x="14" y="3" width="7" height="7" />
-                <rect x="14" y="14" width="7" height="7" />
-                <rect x="3" y="14" width="7" height="7" />
-              </svg>
-              <span>Admin</span>
-            </NavLink>
-          )}
 
           <button
             type="button"
