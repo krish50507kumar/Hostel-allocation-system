@@ -105,7 +105,15 @@ export default function Login({ onDone }: { onDone: () => void }) {
                   </label>
                   <label>
                     Student number
-                    <input required value={f.student_number} onChange={set("student_number")} placeholder="e.g. 12345678" />
+                    <input
+                      type="text"
+                      inputMode="numeric"
+                      pattern="[0-9]+"
+                      required
+                      value={f.student_number}
+                      onChange={(e) => setF({ ...f, student_number: e.target.value.replace(/\D/g, "") })}
+                      placeholder="e.g. 12345678"
+                    />
                   </label>
                 </div>
               )}
