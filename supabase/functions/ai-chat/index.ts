@@ -123,6 +123,13 @@ BUILDING RULES:
 
 28. Use only the name and description returned by get_building_details.
     Never invent building details or amenities not present in the database.
+
+CAMPUS CONTEXT:
+29. The current campus context may include map locations, selected destinations,
+    visits per week, and weekly distance recommendations. Use it when the
+    student asks about their profile, campus map, destinations, or commute.
+30. Treat image values as frontend image references only. Do not describe image
+    contents unless visual image data is explicitly provided.
 `;
 
 // ============================================================
@@ -218,6 +225,120 @@ function isObject(value: unknown): value is Record<string, any> {
     value !== null &&
     !Array.isArray(value)
   );
+}
+
+function haversineMeters(
+  a: { latitude: number; longitude: number },
+  b: { latitude: number; longitude: number },
+) {
+  const radius = 6371000;
+  const lat1 = a.latitude * Math.PI / 180;
+  const lat2 = b.latitude * Math.PI / 180;
+  const dLat = (b.latitude - a.latitude) * Math.PI / 180;
+  const dLng = (b.longitude - a.longitude) * Math.PI / 180;
+  const h = Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * radius * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+async function getCampusContext(sb: ReturnType<typeof createClient>, userId: string) {
+  const [buildingResult, placeResult, routeResult, routineResult] = await Promise.all([
+    sb.from("buildings")
+      .select("id, name, description, latitude, longitude")
+      .eq("is_active", true)
+      .order("name"),
+    sb.from("campus_places")
+      .select("id, name, place_type, description, latitude, longitude")
+      .eq("is_active", true)
+      .order("name"),
+    sb.from("commute_routes")
+      .select("building_id, place_id, distance_meters, walking_minutes"),
+    sb.from("student_routines")
+      .select("id")
+      .eq("student_id", userId)
+      .maybeSingle(),
+  ]);
+  const queryError = [buildingResult, placeResult, routeResult, routineResult].find((result) => result.error)?.error;
+  if (queryError) throw queryError;
+
+  const routineId = routineResult.data?.id as string | undefined;
+  const visitResult = routineId
+    ? await sb.from("routine_visits").select("place_id, visits_per_week").eq("routine_id", routineId)
+    : { data: [], error: null };
+  if (visitResult.error) throw visitResult.error;
+
+  const buildings = buildingResult.data ?? [];
+  const places = placeResult.data ?? [];
+  const routes = routeResult.data ?? [];
+  const visits = visitResult.data ?? [];
+  const visitByPlace = new Map(visits.map((visit: any) => [visit.place_id, Number(visit.visits_per_week)]));
+  const routeByPair = new Map(routes.map((route: any) => [
+    `${route.building_id}:${route.place_id}`,
+    { distance: Number(route.distance_meters), minutes: Number(route.walking_minutes) },
+  ]));
+
+  const recommendations = buildings.map((building: any) => {
+    const destinations = places
+      .filter((place: any) => visitByPlace.has(place.id))
+      .map((place: any) => {
+        const saved = routeByPair.get(`${building.id}:${place.id}`);
+        const fallback = building.latitude != null && building.longitude != null &&
+          place.latitude != null && place.longitude != null
+          ? {
+            distance: haversineMeters(
+              { latitude: Number(building.latitude), longitude: Number(building.longitude) },
+              { latitude: Number(place.latitude), longitude: Number(place.longitude) },
+            ),
+            minutes: Math.max(1, Math.round(haversineMeters(
+              { latitude: Number(building.latitude), longitude: Number(building.longitude) },
+              { latitude: Number(place.latitude), longitude: Number(place.longitude) },
+            ) / 80)),
+          }
+          : null;
+        const route = saved ?? fallback;
+        return route ? {
+          place: place.name,
+          visits: visitByPlace.get(place.id) ?? 1,
+          distance: route.distance,
+          minutes: route.minutes,
+        } : null;
+      })
+      .filter(Boolean) as Array<{ place: string; visits: number; distance: number; minutes: number }>;
+    return {
+      building: building.name,
+      matched_places: destinations.length,
+      weekly_distance_meters: destinations.reduce((sum, item) => sum + 2 * item.visits * item.distance, 0),
+      weekly_walking_minutes: destinations.reduce((sum, item) => sum + 2 * item.visits * item.minutes, 0),
+      destinations,
+    };
+  }).sort((a, b) => b.matched_places - a.matched_places || a.weekly_distance_meters - b.weekly_distance_meters);
+
+  return {
+    map_locations: [
+      ...buildings.map((building: any) => ({
+        name: building.name,
+        type: "hostel",
+        latitude: building.latitude,
+        longitude: building.longitude,
+        image: "/buildings/building-1.png",
+      })),
+      ...places.map((place: any) => ({
+        name: place.name,
+        type: place.place_type,
+        latitude: place.latitude,
+        longitude: place.longitude,
+        selected: visitByPlace.has(place.id),
+      })),
+    ],
+    selected_destinations: places
+      .filter((place: any) => visitByPlace.has(place.id))
+      .map((place: any) => ({
+        name: place.name,
+        type: place.place_type,
+        visits_per_week: visitByPlace.get(place.id),
+      })),
+    recommendations: recommendations.slice(0, 5),
+  };
 }
 
 function safeString(value: unknown): string {
@@ -460,7 +581,23 @@ Deno.serve(async (req: Request) => {
       ],
     }));
 
+  let campusContext: unknown = null;
+  try {
+    campusContext = await getCampusContext(sb, user.id);
+  } catch (error) {
+    console.error("Campus context unavailable:", error);
+  }
+
   const contents: any[] = [
+    ...(campusContext
+      ? [{
+        role: "user",
+        parts: [{
+          text: `CURRENT CAMPUS CONTEXT (database-backed; use only when relevant):
+${JSON.stringify(campusContext)}`,
+        }],
+      }]
+      : []),
     ...history,
     {
       role: "user",

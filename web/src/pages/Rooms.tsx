@@ -7,20 +7,7 @@ type Row = {
   room_type: string | null; facilities: string[]; available_beds: number; active_beds: number;
 };
 type Bed = { id: string; bed_number: string };
-
-// Colour gradient per room type — inspired by the reference's package cards
-const TYPE_COLORS: Record<string, string> = {
-  single:  "linear-gradient(135deg, #1a4f4a 0%, #0d9488 100%)",
-  double:  "linear-gradient(135deg, #1e3a5f 0%, #2d7dd2 100%)",
-  triple:  "linear-gradient(135deg, #4a1f3a 0%, #9b4c7e 100%)",
-  quad:    "linear-gradient(135deg, #3a2a0a 0%, #c07c2a 100%)",
-  default: "linear-gradient(135deg, #2a2a2a 0%, #555 100%)",
-};
-
-function roomGradient(type: string | null) {
-  const t = (type ?? "").toLowerCase();
-  return TYPE_COLORS[t] ?? TYPE_COLORS.default;
-}
+const BUILDING_IMAGE = "/buildings/building-1.png";
 
 export default function Rooms() {
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -74,8 +61,15 @@ export default function Rooms() {
     </section>
   );
 
-  const buildings = [...new Set((rows ?? []).map((r) => r.building_name))];
-  const shown = (rows ?? []).filter((r) => !building || r.building_name === building);
+  const buildings = [...new Set((rows ?? []).map((r) => r.building_name))].map((name) => {
+    const rooms = (rows ?? []).filter((r) => r.building_name === name);
+    return {
+      name,
+      roomCount: rooms.length,
+      availableBeds: rooms.reduce((total, room) => total + room.available_beds, 0),
+    };
+  });
+  const shown = (rows ?? []).filter((r) => r.building_name === building);
 
   return (
     <section>
@@ -93,52 +87,64 @@ export default function Rooms() {
       {msg && <div className="alert alert-success" role="status" style={{ marginBottom: 16 }}>{msg}</div>}
       {err && <div className="alert alert-error" role="alert" style={{ marginBottom: 16 }}>{err}</div>}
 
-      {/* Filter bar */}
-      <div className="filter-bar">
-        <label style={{ maxWidth: 280 }}>
-          Filter by building
-          <select value={building} onChange={(e) => setBuilding(e.target.value)}>
-            <option value="">All buildings</option>
-            {buildings.map((b) => <option key={b}>{b}</option>)}
-          </select>
-        </label>
-        {building && (
-          <button className="btn-ghost btn-sm" onClick={() => setBuilding("")}>Clear</button>
-        )}
-        <span style={{ marginLeft: "auto", fontSize: ".85rem", color: "var(--muted)", alignSelf: "flex-end", paddingBottom: 2 }}>
-          {shown.length} room{shown.length !== 1 ? "s" : ""} available
-        </span>
-      </div>
-
-      {shown.length === 0 && !err && (
-        <p className="state">No rooms are available right now.</p>
+      {!building ? (
+        <>
+          <div className="section-heading">
+            <div>
+              <p className="section-label">Choose a building</p>
+              <p className="section-heading__hint">Select a building to browse its available rooms.</p>
+            </div>
+            <span className="section-heading__count">{buildings.length} building{buildings.length !== 1 ? "s" : ""}</span>
+          </div>
+          <ul className="building-grid" style={{ listStyle: "none", padding: 0 }}>
+            {buildings.map((b, index) => (
+              <li key={b.name}>
+                <button className="building-card" onClick={() => setBuilding(b.name)}>
+                <img className="building-card__image" src={BUILDING_IMAGE} alt={`${b.name} building`} />
+                  <span className="building-card__body">
+                    <span className="building-card__eyebrow">Building {String.fromCharCode(65 + index)}</span>
+                    <span className="building-card__name">{b.name}</span>
+                    <span className="building-card__meta">
+                      {b.roomCount} room{b.roomCount !== 1 ? "s" : ""} · {b.availableBeds} bed{b.availableBeds !== 1 ? "s" : ""} available
+                    </span>
+                    <span className="building-card__action">View rooms <span aria-hidden="true">→</span></span>
+                  </span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : (
+        <>
+          <div className="section-heading">
+            <div>
+              <p className="section-label">{building}</p>
+              <p className="section-heading__hint">Available rooms in this building.</p>
+            </div>
+            <button className="btn-ghost btn-sm" onClick={() => setBuilding("")}>All buildings</button>
+          </div>
+          {shown.length === 0 && !err && (
+            <p className="state">No rooms are available right now.</p>
+          )}
+          <ul className="grid" style={{ listStyle: "none", padding: 0 }}>
+            {shown.map((r) => (
+              <li key={r.room_id} className="room-card">
+                <div className="room-card__body">
+                  <div>
+                    <div className="room-card__title">Room {r.room_number}</div>
+                    <div className="room-card__building">{r.building_name}</div>
+                  </div>
+                  <BedMeter available={r.available_beds} total={r.active_beds} />
+                  <Facilities items={r.facilities} />
+                  <button onClick={() => pick(r)} style={{ marginTop: 6, alignSelf: "flex-start" }}>
+                    Choose a bed
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-
-      {/* Package-style room cards — inspired by "Our Packages" section */}
-      <ul className="grid" style={{ listStyle: "none", padding: 0 }}>
-        {shown.map((r) => (
-          <li key={r.room_id} className="room-card">
-            {/* Coloured image-top area — one colour per room type */}
-            <div
-              className="room-card__header"
-              style={{ background: roomGradient(r.room_type) }}
-            >
-              <span className="room-card__badge">{r.room_type ?? "Standard"}</span>
-            </div>
-            <div className="room-card__body">
-              <div>
-                <div className="room-card__title">Room {r.room_number}</div>
-                <div className="room-card__building">{r.building_name}</div>
-              </div>
-              <BedMeter available={r.available_beds} total={r.active_beds} />
-              <Facilities items={r.facilities} />
-              <button onClick={() => pick(r)} style={{ marginTop: 6, alignSelf: "flex-start" }}>
-                Choose a bed
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
 
       {/* Bed picker modal */}
       {open && (

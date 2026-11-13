@@ -8,6 +8,7 @@ import Admin from "./pages/Admin";
 import AIAssistant from "./pages/AIAssistant";
 import AdminBookings from "./pages/AdminBookings";
 import AdminSettings from "./pages/AdminSettings";
+import Profile from "./pages/Profile";
 
 type Me = { id: string; full_name: string; role: "student" | "admin" } | null;
 
@@ -97,6 +98,13 @@ export default function App() {
                 >
                   My Bookings
                 </NavLink>
+                <NavLink
+                  to="/student/profile"
+                  onClick={() => setMenuOpen(false)}
+                  className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
+                >
+                  Profile
+                </NavLink>
                 {me.role === "admin" && (
                   <>
                     <span className="topnav__divider" aria-hidden="true" />
@@ -152,6 +160,7 @@ export default function App() {
           <Route path="/student/rooms" element={me ? <Rooms /> : <Navigate to="/login" />} />
           <Route path="/student/ai-assistant" element={me ? <AIAssistant /> : <Navigate to="/login" />} />
           <Route path="/student/bookings" element={me ? <MyBookings /> : <Navigate to="/login" />} />
+          <Route path="/student/profile" element={me ? <Profile /> : <Navigate to="/login" />} />
           <Route path="/admin" element={me?.role === "admin" ? <Admin /> : <Navigate to="/login" />} />
           <Route path="/admin/bookings" element={me?.role === "admin" ? <AdminBookings /> : <Navigate to="/login" />} />
           <Route path="/admin/settings" element={me?.role === "admin" ? <AdminSettings /> : <Navigate to="/login" />} />

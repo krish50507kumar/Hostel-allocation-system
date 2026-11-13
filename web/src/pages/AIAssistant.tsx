@@ -15,23 +15,10 @@ type Pending = {
 type Msg = { role: "user" | "model"; text: string };
 
 const PROMPTS = [
-  "Find an available bed in Building A",
+  "Find an available bed in Boys hostel 1",
   "Show rooms with an attached bathroom",
   "Compare the available room options",
 ];
-
-const TYPE_COLORS: Record<string, string> = {
-  single:  "linear-gradient(135deg, #1a4f4a 0%, #0d9488 100%)",
-  double:  "linear-gradient(135deg, #1e3a5f 0%, #2d7dd2 100%)",
-  triple:  "linear-gradient(135deg, #4a1f3a 0%, #9b4c7e 100%)",
-  quad:    "linear-gradient(135deg, #3a2a0a 0%, #c07c2a 100%)",
-  default: "linear-gradient(135deg, #2a2a2a 0%, #555 100%)",
-};
-
-function roomGradient(type: string | null) {
-  const t = (type ?? "").toLowerCase();
-  return TYPE_COLORS[t] ?? TYPE_COLORS.default;
-}
 
 export default function AIAssistant() {
   const [msgs, setMsgs]       = useState<Msg[]>([]);
@@ -88,6 +75,8 @@ export default function AIAssistant() {
       </div>
 
       <div className="chat-wrap">
+        <div className="chat-layout">
+          <div className="chat-panel">
         {/* Quick prompt chips */}
         {msgs.length === 0 && (
           <div>
@@ -129,6 +118,29 @@ export default function AIAssistant() {
         {err && <div className="alert alert-error" role="alert">{err}</div>}
         {ok  && <div className="alert alert-success" role="status">{ok}</div>}
 
+            {/* Query input */}
+            <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="chat-form">
+              <input
+                value={input}
+                maxLength={500}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder="Ask anything, e.g. 'A double room with attached bathroom'…"
+                aria-label="Your request"
+              />
+              <button type="submit" disabled={busy || !input.trim()}>
+                Search
+              </button>
+            </form>
+          </div>
+
+          <aside className="chat-results" aria-label="Assistant room recommendations">
+        {rooms.length === 0 && !pending && (
+          <div className="chat-results__empty">
+            <span className="chat-results__icon" aria-hidden="true">⌕</span>
+            <h2>Room recommendations</h2>
+            <p>Ask the assistant to find rooms and they will appear here.</p>
+          </div>
+        )}
         {/* Found rooms displayed as package cards */}
         {rooms.length > 0 && (
           <>
@@ -136,12 +148,6 @@ export default function AIAssistant() {
             <ul className="grid" style={{ listStyle: "none", padding: 0 }}>
               {rooms.map((r) => (
                 <li key={r.room_id} className="room-card">
-                  <div
-                    className="room-card__header"
-                    style={{ background: roomGradient(r.room_type) }}
-                  >
-                    <span className="room-card__badge">{r.room_type ?? "Standard"}</span>
-                  </div>
                   <div className="room-card__body">
                     <div>
                       <div className="room-card__title">Room {r.room_number}</div>
@@ -175,20 +181,8 @@ export default function AIAssistant() {
             </div>
           </div>
         )}
-
-        {/* Query input */}
-        <form onSubmit={(e) => { e.preventDefault(); send(input); }} className="chat-form">
-          <input
-            value={input}
-            maxLength={500}
-            onChange={(e) => setInput(e.target.value)}
-            placeholder="Ask anything, e.g. 'A double room with attached bathroom'…"
-            aria-label="Your request"
-          />
-          <button type="submit" disabled={busy || !input.trim()}>
-            Search
-          </button>
-        </form>
+            </aside>
+          </div>
       </div>
     </section>
   );

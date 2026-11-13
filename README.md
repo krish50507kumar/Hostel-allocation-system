@@ -53,7 +53,8 @@ HostelHub is a modern university hostel booking and room allocation platform. It
 │       ├── 0002_frontend_rpcs.sql    # Availability, booking, and taken bed RPCs
 │       ├── 0003_fix_booking.sql      # Concurrency fixes and transactional booking RPC
 │       ├── 0004_ai_proposals.sql     # AI proposal creation and expiration logic
-│       └── 0005_admin_tools.sql      # Admin RPCs: building/room upsert & search
+│       ├── 0005_admin_tools.sql      # Admin RPCs: building/room upsert & search
+│       └── 0006_replace_schema.sql   # Clean schema for routines, preferences, commute & discovery
 └── web/
     ├── src/
     │   ├── pages/            # View components (Rooms, Login, MyBookings, Admin, etc.)
@@ -78,6 +79,12 @@ HostelHub is a modern university hostel booking and room allocation platform. It
    - `supabase/migrations/0003_fix_booking.sql`
    - `supabase/migrations/0004_ai_proposals.sql`
    - `supabase/migrations/0005_admin_tools.sql`
+   - `supabase/migrations/0006_replace_schema.sql`
+
+`0006_replace_schema.sql` is intentionally destructive for application data: it removes
+the previous public schema and recreates it for the new design. Supabase Auth users are
+preserved and their profile rows are backfilled during the migration. Run this migration
+only when starting with a fresh application dataset.
 3. *(Optional)* Run seed data to populate demo buildings, rooms, and facilities.
 
 ### 2. Frontend Setup
