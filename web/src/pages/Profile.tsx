@@ -157,6 +157,7 @@ export default function Profile() {
   const [routes, setRoutes] = useState<Route[]>([]);
   const [visits, setVisits] = useState<Visit[]>([]);
   const [frequencyByPlace, setFrequencyByPlace] = useState<Record<string, number>>({});
+  const [preferredGender, setPreferredGender] = useState<"boy" | "girl" | "">("");
   const [selected, setSelected] = useState<string[]>([]);
   const [routineId, setRoutineId] = useState<string | null>(null);
   const [recommendation, setRecommendation] = useState<Recommendation | null>(null);
@@ -211,13 +212,14 @@ export default function Profile() {
         return;
       }
 
-      const [placeResult, buildingResult, routeResult, routineResult] = await Promise.all([
+      const [placeResult, buildingResult, routeResult, routineResult, preferenceResult] = await Promise.all([
         supabase.from("campus_places").select("id, name, description, place_type, latitude, longitude").order("name"),
         supabase.from("buildings").select("id, name, latitude, longitude").eq("is_active", true).order("name"),
         supabase.from("commute_routes").select("building_id, place_id, distance_meters, walking_minutes"),
         supabase.from("student_routines").select("id").eq("student_id", user.id).maybeSingle(),
+        supabase.from("room_preferences").select("preferred_gender").eq("student_id", user.id).maybeSingle(),
       ]);
-      const firstError = [placeResult, buildingResult, routeResult, routineResult].find((result) => result.error)?.error;
+      const firstError = [placeResult, buildingResult, routeResult, routineResult, preferenceResult].find((result) => result.error)?.error;
       if (firstError) {
         setErr(friendly(firstError));
         setBusy(false);
@@ -232,6 +234,8 @@ export default function Profile() {
       setBuildings(loadedBuildings);
       setRoutes(loadedRoutes);
       setRoutineId(routine?.id ?? null);
+      const savedGender = preferenceResult.data?.preferred_gender;
+      setPreferredGender(savedGender === "boy" || savedGender === "girl" ? savedGender : "");
 
       let savedVisits: Visit[] = [];
       if (routine) {
@@ -281,8 +285,27 @@ export default function Profile() {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) return setErr("Your session has expired. Please sign in again.");
     if (!selected.length) return setErr("Select at least one place to calculate a recommendation.");
+    if (!preferredGender) return setErr("Choose whether you need boys or girls hostel buildings before saving.");
 
     setSaving(true);
+    const { error: preferenceError } = await supabase
+      .from("room_preferences")
+      .upsert({ student_id: user.id, preferred_gender: preferredGender }, { onConflict: "student_id" });
+    if (preferenceError) {
+      setSaving(false);
+      return setErr(friendly(preferenceError));
+    }
+    const { data: refreshedBuildings, error: refreshedBuildingsError } = await supabase
+      .from("buildings")
+      .select("id, name, latitude, longitude")
+      .eq("is_active", true)
+      .order("name");
+    if (refreshedBuildingsError) {
+      setSaving(false);
+      return setErr(friendly(refreshedBuildingsError));
+    }
+    const availableBuildings = (refreshedBuildings ?? []) as Building[];
+    setBuildings(availableBuildings);
     const { data: routine, error: routineError } = await supabase
       .from("student_routines")
       .upsert({ id: routineId ?? undefined, student_id: user.id }, { onConflict: "student_id" })
@@ -309,7 +332,7 @@ export default function Profile() {
     if (insertError) return setErr(friendly(insertError));
     setVisits(savedVisits);
     setRoutineId(id);
-    calculateBestBuilding(selected, savedVisits);
+    setRecommendation(bestBuilding(selected, availableBuildings, places, routes, savedVisits));
     setOk("Your campus preferences were saved.");
   }
 
@@ -375,6 +398,15 @@ export default function Profile() {
             <h2>Where do you go?</h2>
             <p className="settings-muted">Choose every class building, mess, library, or campus place you regularly visit.</p>
           </div>
+          <label>
+            Hostel building preference
+            <select required value={preferredGender} onChange={(event) => setPreferredGender(event.target.value as "boy" | "girl" | "")}>
+              <option value="">Select hostel type…</option>
+              <option value="boy">Boys hostel</option>
+              <option value="girl">Girls hostel</option>
+            </select>
+            <span className="settings-help">Only matching hostel buildings will be shown and recommended.</span>
+          </label>
           {groupedPlaces.length === 0 && <p className="state">No campus places have been configured yet.</p>}
           {groupedPlaces.map((group) => (
             <fieldset className={`profile-place-group ${group.title === "Classes" ? "profile-place-group--classes" : ""}`} key={group.title}>

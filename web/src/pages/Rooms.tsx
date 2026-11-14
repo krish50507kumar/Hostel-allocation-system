@@ -155,7 +155,11 @@ export default function Rooms() {
               </li>
             ))}
           </ul>
-          {filteredBuildings.length === 0 && <p className="state">No buildings match that name or synonym.</p>}
+          {filteredBuildings.length === 0 && (
+            <p className="state">
+              No hostel buildings are available for this preference. Choose Boys hostel or Girls hostel in Preferences.
+            </p>
+          )}
         </>
       ) : (
         <>

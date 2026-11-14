@@ -141,6 +141,9 @@ CAMPUS CONTEXT:
 32. Use the saved campus AI notes when answering campus questions. Treat them
     as administrator-provided facts and instructions; do not invent details
     that are not in the notes.
+33. Hostel buildings are filtered by the student's saved boys/girls preference.
+    If no hostel buildings are available, tell the student to choose their
+    hostel type in Preferences instead of inventing or recommending one.
 `;
 
 // ============================================================
@@ -254,7 +257,7 @@ function haversineMeters(
 }
 
 async function getCampusContext(sb: ReturnType<typeof createClient>, userId: string) {
-  const [buildingResult, placeResult, routeResult, routineResult, campusDetailsResult, campusNotesResult] = await Promise.all([
+  const [buildingResult, placeResult, routeResult, routineResult, campusDetailsResult, campusNotesResult, preferenceResult] = await Promise.all([
     sb.from("buildings")
       .select("id, name, synonyms, features, description, latitude, longitude")
       .eq("is_active", true)
@@ -274,8 +277,9 @@ async function getCampusContext(sb: ReturnType<typeof createClient>, userId: str
       .select("title, content, category, updated_at")
       .eq("is_active", true)
       .order("updated_at", { ascending: false }),
+    sb.from("room_preferences").select("preferred_gender").eq("student_id", userId).maybeSingle(),
   ]);
-  const queryError = [buildingResult, placeResult, routeResult, routineResult, campusDetailsResult, campusNotesResult].find((result) => result.error)?.error;
+  const queryError = [buildingResult, placeResult, routeResult, routineResult, campusDetailsResult, campusNotesResult, preferenceResult].find((result) => result.error)?.error;
   if (queryError) throw queryError;
 
   const   routineId = routineResult.data?.id as string | undefined;
@@ -333,6 +337,7 @@ async function getCampusContext(sb: ReturnType<typeof createClient>, userId: str
   return {
     campus_details: campusDetailsResult.data,
     campus_ai_notes: campusNotesResult.data ?? [],
+    student_preferences: preferenceResult.data ?? {},
     buildings: buildings.map((building: any) => ({
       name: building.name,
       synonyms: building.synonyms ?? [],
