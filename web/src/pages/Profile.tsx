@@ -234,8 +234,13 @@ export default function Profile() {
       setBuildings(loadedBuildings);
       setRoutes(loadedRoutes);
       setRoutineId(routine?.id ?? null);
-      const savedGender = preferenceResult.data?.preferred_gender;
-      setPreferredGender(savedGender === "boy" || savedGender === "girl" ? savedGender : "");
+      const savedGender = String(preferenceResult.data?.preferred_gender ?? "").toLowerCase();
+      const normalizedGender = ["male", "man", "boy", "boys"].includes(savedGender)
+        ? "boy"
+        : ["female", "woman", "girl", "girls"].includes(savedGender)
+          ? "girl"
+          : "";
+      setPreferredGender(normalizedGender);
 
       let savedVisits: Visit[] = [];
       if (routine) {

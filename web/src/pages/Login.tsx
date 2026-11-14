@@ -4,7 +4,7 @@ import { supabase } from "../lib";
 
 export default function Login({ onDone }: { onDone: () => void }) {
   const [mode, setMode] = useState<"in" | "up">("in");
-  const [f, setF] = useState({ email: "", password: "", full_name: "", student_number: "" });
+  const [f, setF] = useState({ email: "", password: "", full_name: "", student_number: "", gender: "" });
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
   const nav = useNavigate();
@@ -18,7 +18,7 @@ export default function Login({ onDone }: { onDone: () => void }) {
       : await supabase.auth.signUp({
           email: f.email,
           password: f.password,
-          options: { data: { full_name: f.full_name, student_number: f.student_number } },
+          options: { data: { full_name: f.full_name, student_number: f.student_number, gender: f.gender } },
         });
     setBusy(false);
     if (error) return setErr(error.message);
@@ -114,6 +114,14 @@ export default function Login({ onDone }: { onDone: () => void }) {
                       onChange={(e) => setF({ ...f, student_number: e.target.value.replace(/\D/g, "") })}
                       placeholder="e.g. 12345678"
                     />
+                  </label>
+                  <label>
+                    Gender
+                    <select required value={f.gender} onChange={(e) => setF({ ...f, gender: e.target.value })}>
+                      <option value="">Select gender…</option>
+                      <option value="boy">Boy</option>
+                      <option value="girl">Girl</option>
+                    </select>
                   </label>
                 </div>
               )}

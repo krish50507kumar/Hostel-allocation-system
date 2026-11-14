@@ -67,7 +67,8 @@ HostelHub is a modern university hostel booking and room allocation platform. It
 │       ├── 0011_campus_details_and_place_synonyms.sql # Campus details and synonyms for all place types
 │       ├── 0012_campus_ai_notes.sql # Flexible admin-managed campus notes for the AI
 │       ├── 0013_building_features.sql # Building-level amenities and characteristics
-│       └── 0014_gender_building_access.sql # Gender preference access rules for hostel buildings
+│       ├── 0014_gender_building_access.sql # Gender preference access rules for hostel buildings
+│       └── 0015_required_gender_registration.sql # Required registration gender and value normalization
 └── web/
     ├── src/
     │   ├── pages/            # View components (Rooms, Login, MyBookings, Admin, etc.)
@@ -101,6 +102,7 @@ HostelHub is a modern university hostel booking and room allocation platform. It
    - `supabase/migrations/0012_campus_ai_notes.sql`
    - `supabase/migrations/0013_building_features.sql`
    - `supabase/migrations/0014_gender_building_access.sql`
+   - `supabase/migrations/0015_required_gender_registration.sql`
 
 `0006_replace_schema.sql` is intentionally destructive for application data: it removes
 the previous public schema and recreates it for the new design. Supabase Auth users are
