@@ -128,8 +128,9 @@ BUILDING RULES:
 28. Do not call get_building_details when the student is only searching
     for available rooms, beds or facilities (use search_rooms instead).
 
-29. Use only the name and description returned by get_building_details.
-    Never invent building details or amenities not present in the database.
+29. Use only the name, description and features returned by
+    get_building_details. Never invent building details or amenities not
+    present in the database.
 
 CAMPUS CONTEXT:
 30. The current campus context may include map locations, selected destinations,
@@ -255,7 +256,7 @@ function haversineMeters(
 async function getCampusContext(sb: ReturnType<typeof createClient>, userId: string) {
   const [buildingResult, placeResult, routeResult, routineResult, campusDetailsResult, campusNotesResult] = await Promise.all([
     sb.from("buildings")
-      .select("id, name, synonyms, description, latitude, longitude")
+      .select("id, name, synonyms, features, description, latitude, longitude")
       .eq("is_active", true)
       .order("name"),
     sb.from("campus_places")
@@ -335,6 +336,7 @@ async function getCampusContext(sb: ReturnType<typeof createClient>, userId: str
     buildings: buildings.map((building: any) => ({
       name: building.name,
       synonyms: building.synonyms ?? [],
+      features: building.features ?? [],
       description: building.description,
       latitude: building.latitude,
       longitude: building.longitude,
@@ -352,6 +354,7 @@ async function getCampusContext(sb: ReturnType<typeof createClient>, userId: str
       ...buildings.map((building: any) => ({
         name: building.name,
         synonyms: building.synonyms ?? [],
+        features: building.features ?? [],
         type: "hostel",
         latitude: building.latitude,
         longitude: building.longitude,
@@ -948,7 +951,7 @@ ${JSON.stringify(campusContext)}`,
       const [buildingResult, placeResult] = await Promise.all([
         sb
         .from("buildings")
-        .select("id, name, synonyms, description, latitude, longitude")
+        .select("id, name, synonyms, features, description, latitude, longitude")
         .eq("is_active", true)
         .order("name"),
         sb.from("campus_places")
@@ -969,6 +972,7 @@ ${JSON.stringify(campusContext)}`,
         id: b.id,
         name: b.name,
         synonyms: b.synonyms ?? [],
+        features: b.features ?? [],
         type: b.type ?? b.place_type,
         description: b.description || "No description available.",
         latitude: b.latitude,

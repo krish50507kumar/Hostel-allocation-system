@@ -3,7 +3,7 @@ import { supabase, friendly } from "../lib";
 import { BedMeter, Facilities, SkeletonGrid } from "../components";
 
 type Row = {
-  building_id: string; building_name: string; building_synonyms: string[]; room_id: string; room_number: string;
+  building_id: string; building_name: string; building_synonyms: string[]; building_features: string[]; room_id: string; room_number: string;
   room_type: string | null; facilities: string[]; available_beds: number; active_beds: number;
 };
 type Bed = { id: string; bed_number: string };
@@ -90,6 +90,7 @@ export default function Rooms() {
       id: row.building_id,
       name: row.building_name,
       synonyms: row.building_synonyms ?? [],
+      features: row.building_features ?? [],
       roomCount: rooms.length,
       availableBeds: rooms.reduce((total, room) => total + room.available_beds, 0),
     };
@@ -144,6 +145,7 @@ export default function Rooms() {
                     <span className="building-card__eyebrow">Building {String.fromCharCode(65 + index)}</span>
                     <span className="building-card__name">{b.name}</span>
                     {b.synonyms.length > 0 && <span className="building-card__meta">Also known as: {b.synonyms.join(", ")}</span>}
+                    {b.features.length > 0 && <span className="building-card__meta">Features: {b.features.join(", ")}</span>}
                     <span className="building-card__meta">
                       {b.roomCount} room{b.roomCount !== 1 ? "s" : ""} · {b.availableBeds} bed{b.availableBeds !== 1 ? "s" : ""} available
                     </span>

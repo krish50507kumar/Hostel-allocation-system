@@ -40,6 +40,7 @@ HostelHub is a modern university hostel booking and room allocation platform. It
 - **Academic Calendar Settings:** Configure college start dates, cancellation lead times (in days), and local timezones with a dynamic cancellation cutoff preview.
 - **Campus Information Management:** Admins can maintain campus overview, contact details, facilities, rules, emergency guidance, and synonyms for hostel buildings, class buildings, libraries, and messes.
 - **Campus AI Knowledge Base:** Admins can add multiple titled campus notes or instructions, edit them later, and remove outdated notes. Active notes are provided to the AI assistant.
+- **Building Features:** Admins can maintain building-level amenities and characteristics, which appear on building cards and in AI building details.
 
 ---
 
@@ -64,6 +65,7 @@ HostelHub is a modern university hostel booking and room allocation platform. It
 │       ├── 0010_building_synonyms.sql # Hostel building synonyms and synonym-aware availability data
 │       ├── 0011_campus_details_and_place_synonyms.sql # Campus details and synonyms for all place types
 │       └── 0012_campus_ai_notes.sql # Flexible admin-managed campus notes for the AI
+│       └── 0013_building_features.sql # Building-level amenities and characteristics
 └── web/
     ├── src/
     │   ├── pages/            # View components (Rooms, Login, MyBookings, Admin, etc.)
@@ -95,6 +97,7 @@ HostelHub is a modern university hostel booking and room allocation platform. It
    - `supabase/migrations/0010_building_synonyms.sql`
    - `supabase/migrations/0011_campus_details_and_place_synonyms.sql`
    - `supabase/migrations/0012_campus_ai_notes.sql`
+   - `supabase/migrations/0013_building_features.sql`
 
 `0006_replace_schema.sql` is intentionally destructive for application data: it removes
 the previous public schema and recreates it for the new design. Supabase Auth users are

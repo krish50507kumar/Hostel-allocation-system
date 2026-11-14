@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase, friendly } from "../lib";
 
-type Bld = { id: string; name: string; synonyms: string[]; description: string | null; latitude: number | null; longitude: number | null };
+type Bld = { id: string; name: string; synonyms: string[]; features: string[]; description: string | null; latitude: number | null; longitude: number | null };
 type Room = {
   id: string; building_id: string; room_number: string; room_type: string | null;
   capacity: number; facilities: string[];
@@ -43,6 +43,7 @@ export default function Admin() {
   const [msg, setMsg]     = useState("");
   const [bName, setBName] = useState("");
   const [bSynonyms, setBSynonyms] = useState("");
+  const [bFeatures, setBFeatures] = useState("");
   const [desc, setDesc]   = useState("");
   const [bLat, setBLat] = useState("");
   const [bLng, setBLng] = useState("");
@@ -50,7 +51,7 @@ export default function Admin() {
   const [facs, setFacs]   = useState<string[]>([]);
   const [r, setR] = useState({ building_id: "", room_number: "", room_type: "double", capacity: 2 });
   const [editingBuilding, setEditingBuilding] = useState<string | null>(null);
-  const [buildingDraft, setBuildingDraft] = useState({ name: "", synonyms: "", description: "", latitude: "", longitude: "" });
+  const [buildingDraft, setBuildingDraft] = useState({ name: "", synonyms: "", features: "", description: "", latitude: "", longitude: "" });
   const [editingRoom, setEditingRoom] = useState<string | null>(null);
   const [roomDraft, setRoomDraft] = useState<Room | null>(null);
   const [editingPlace, setEditingPlace] = useState<string | null>(null);
@@ -60,7 +61,7 @@ export default function Admin() {
 
   async function load() {
     const [b, roomRows, roomCount, bedCount, occupied, campusPlaces] = await Promise.all([
-      supabase.from("buildings").select("id, name, synonyms, description, latitude, longitude").order("name"),
+      supabase.from("buildings").select("id, name, synonyms, features, description, latitude, longitude").order("name"),
       supabase.from("rooms").select("id, building_id, room_number, room_type, capacity, facilities").eq("is_active", true).order("room_number"),
       supabase.from("rooms").select("id", { count: "exact", head: true }).eq("is_active", true),
       supabase.from("beds").select("id", { count: "exact", head: true }).eq("is_active", true),
@@ -84,9 +85,10 @@ export default function Admin() {
       p_latitude: bLat ? Number(bLat) : null,
       p_longitude: bLng ? Number(bLng) : null,
       p_synonyms: parseSynonyms(bSynonyms),
+      p_features: parseSynonyms(bFeatures),
     });
     if (error) return setErr(friendly(error));
-    setErr(""); setMsg("Building created."); setBName(""); setBSynonyms(""); setDesc(""); setBLat(""); setBLng(""); load();
+    setErr(""); setMsg("Building created."); setBName(""); setBSynonyms(""); setBFeatures(""); setDesc(""); setBLat(""); setBLng(""); load();
   }
 
   async function addRoom(e: React.FormEvent) {
@@ -101,7 +103,7 @@ export default function Admin() {
 
   function startBuildingEdit(b: Bld) {
     setEditingBuilding(b.id);
-    setBuildingDraft({ name: b.name, synonyms: b.synonyms.join(", "), description: b.description ?? "", latitude: b.latitude?.toString() ?? "", longitude: b.longitude?.toString() ?? "" });
+    setBuildingDraft({ name: b.name, synonyms: b.synonyms.join(", "), features: b.features.join(", "), description: b.description ?? "", latitude: b.latitude?.toString() ?? "", longitude: b.longitude?.toString() ?? "" });
     setEditingRoom(null);
   }
 
@@ -114,6 +116,7 @@ export default function Admin() {
       p_latitude: buildingDraft.latitude ? Number(buildingDraft.latitude) : null,
       p_longitude: buildingDraft.longitude ? Number(buildingDraft.longitude) : null,
       p_synonyms: parseSynonyms(buildingDraft.synonyms),
+      p_features: parseSynonyms(buildingDraft.features),
     });
     if (error) return setErr(friendly(error));
     setErr(""); setMsg("Building updated."); setEditingBuilding(null); load();
@@ -222,6 +225,10 @@ export default function Admin() {
               <label>Building synonyms
                 <input value={bSynonyms} onChange={(e) => setBSynonyms(e.target.value)} placeholder="Comma-separated, e.g. A Block, North hostel" />
                 <span className="settings-help">Students can use these names to find the building.</span>
+              </label>
+              <label>Building features
+                <input value={bFeatures} onChange={(e) => setBFeatures(e.target.value)} placeholder="Comma-separated, e.g. Laundry, Wi-Fi, Security" />
+                <span className="settings-help">Add amenities or characteristics students should know about.</span>
               </label>
               <label>Building description
                 <textarea required value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Describe the location and facilities" rows={3} />
@@ -335,6 +342,9 @@ export default function Admin() {
                   <label>Building synonyms
                     <input value={buildingDraft.synonyms} onChange={(e) => setBuildingDraft({ ...buildingDraft, synonyms: e.target.value })} placeholder="Comma-separated alternate names" />
                   </label>
+                  <label>Building features
+                    <input value={buildingDraft.features} onChange={(e) => setBuildingDraft({ ...buildingDraft, features: e.target.value })} placeholder="Comma-separated amenities or characteristics" />
+                  </label>
                   <label>Description<textarea required value={buildingDraft.description} onChange={(e) => setBuildingDraft({ ...buildingDraft, description: e.target.value })} rows={3} /></label>
                   <div className="input-row">
                     <label>Latitude<input type="number" step="any" min="-90" max="90" value={buildingDraft.latitude} onChange={(e) => setBuildingDraft({ ...buildingDraft, latitude: e.target.value })} /></label>
@@ -348,6 +358,7 @@ export default function Admin() {
                     <h2>{b.name}</h2>
                     <p>{b.description || "No description provided."}</p>
                     {b.synonyms.length > 0 && <p>Also known as: {b.synonyms.join(", ")}</p>}
+                    {b.features.length > 0 && <p>Features: {b.features.join(", ")}</p>}
                   </div>
                   <button className="btn-outline btn-sm" onClick={() => startBuildingEdit(b)}>Edit building</button>
                 </div>
