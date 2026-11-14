@@ -248,6 +248,9 @@ export default function AIAssistant() {
                   <p className="state">No beds free. Refresh and choose another room.</p>
                 )}
               </div>
+              <p style={{ fontSize: ".78rem", color: "var(--muted)", margin: 0 }}>
+                Bed 1 is closer to the door. The last bed is closer to the air conditioner.
+              </p>
             </div>
           </div>
         )}

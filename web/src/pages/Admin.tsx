@@ -1,14 +1,14 @@
 import { useEffect, useState } from "react";
 import { supabase, friendly } from "../lib";
 
-type Bld = { id: string; name: string; description: string | null; latitude: number | null; longitude: number | null };
+type Bld = { id: string; name: string; synonyms: string[]; description: string | null; latitude: number | null; longitude: number | null };
 type Room = {
   id: string; building_id: string; room_number: string; room_type: string | null;
   capacity: number; facilities: string[];
 };
 type PlaceType = "class_building" | "hostel_building" | "library" | "mess";
-type Place = { id: string; name: string; description: string | null; place_type: PlaceType; latitude: number | null; longitude: number | null };
-type PlaceDraft = { id: string | null; name: string; description: string; type: PlaceType; latitude: string; longitude: string };
+type Place = { id: string; name: string; synonyms: string[]; description: string | null; place_type: PlaceType; latitude: number | null; longitude: number | null };
+type PlaceDraft = { id: string | null; name: string; synonyms: string; description: string; type: PlaceType; latitude: string; longitude: string };
 type Stats = { buildings: number; rooms: number; beds: number; occupied: number };
 
 const STAT_LABELS: Record<string, string> = {
@@ -32,6 +32,7 @@ const PLACE_TYPES: { value: PlaceType; label: string }[] = [
   { value: "library", label: "Library" },
   { value: "mess", label: "Mess" },
 ];
+const parseSynonyms = (value: string) => value.split(",").map((item) => item.trim()).filter(Boolean);
 
 export default function Admin() {
   const [blds, setBlds]   = useState<Bld[]>([]);
@@ -41,14 +42,15 @@ export default function Admin() {
   const [err, setErr]     = useState("");
   const [msg, setMsg]     = useState("");
   const [bName, setBName] = useState("");
+  const [bSynonyms, setBSynonyms] = useState("");
   const [desc, setDesc]   = useState("");
   const [bLat, setBLat] = useState("");
   const [bLng, setBLng] = useState("");
-  const [place, setPlace] = useState({ name: "", description: "", type: "class_building" as PlaceType, latitude: "", longitude: "" });
+  const [place, setPlace] = useState({ name: "", synonyms: "", description: "", type: "class_building" as PlaceType, latitude: "", longitude: "" });
   const [facs, setFacs]   = useState<string[]>([]);
   const [r, setR] = useState({ building_id: "", room_number: "", room_type: "double", capacity: 2 });
   const [editingBuilding, setEditingBuilding] = useState<string | null>(null);
-  const [buildingDraft, setBuildingDraft] = useState({ name: "", description: "", latitude: "", longitude: "" });
+  const [buildingDraft, setBuildingDraft] = useState({ name: "", synonyms: "", description: "", latitude: "", longitude: "" });
   const [editingRoom, setEditingRoom] = useState<string | null>(null);
   const [roomDraft, setRoomDraft] = useState<Room | null>(null);
   const [editingPlace, setEditingPlace] = useState<string | null>(null);
@@ -58,12 +60,12 @@ export default function Admin() {
 
   async function load() {
     const [b, roomRows, roomCount, bedCount, occupied, campusPlaces] = await Promise.all([
-      supabase.from("buildings").select("id, name, description, latitude, longitude").order("name"),
+      supabase.from("buildings").select("id, name, synonyms, description, latitude, longitude").order("name"),
       supabase.from("rooms").select("id, building_id, room_number, room_type, capacity, facilities").eq("is_active", true).order("room_number"),
       supabase.from("rooms").select("id", { count: "exact", head: true }).eq("is_active", true),
       supabase.from("beds").select("id", { count: "exact", head: true }).eq("is_active", true),
       supabase.from("bookings").select("id", { count: "exact", head: true }).eq("status", "active"),
-      supabase.from("campus_places").select("id, name, description, place_type, latitude, longitude").eq("is_active", true).order("name"),
+      supabase.from("campus_places").select("id, name, synonyms, description, place_type, latitude, longitude").eq("is_active", true).order("name"),
     ]);
     setBlds((b.data ?? []) as Bld[]);
     setRooms((roomRows.data ?? []) as Room[]);
@@ -81,9 +83,10 @@ export default function Admin() {
       p_description: desc.trim(),
       p_latitude: bLat ? Number(bLat) : null,
       p_longitude: bLng ? Number(bLng) : null,
+      p_synonyms: parseSynonyms(bSynonyms),
     });
     if (error) return setErr(friendly(error));
-    setErr(""); setMsg("Building created."); setBName(""); setDesc(""); setBLat(""); setBLng(""); load();
+    setErr(""); setMsg("Building created."); setBName(""); setBSynonyms(""); setDesc(""); setBLat(""); setBLng(""); load();
   }
 
   async function addRoom(e: React.FormEvent) {
@@ -98,7 +101,7 @@ export default function Admin() {
 
   function startBuildingEdit(b: Bld) {
     setEditingBuilding(b.id);
-    setBuildingDraft({ name: b.name, description: b.description ?? "", latitude: b.latitude?.toString() ?? "", longitude: b.longitude?.toString() ?? "" });
+    setBuildingDraft({ name: b.name, synonyms: b.synonyms.join(", "), description: b.description ?? "", latitude: b.latitude?.toString() ?? "", longitude: b.longitude?.toString() ?? "" });
     setEditingRoom(null);
   }
 
@@ -110,6 +113,7 @@ export default function Admin() {
       p_id: id, p_name: buildingDraft.name.trim(), p_description: buildingDraft.description.trim(),
       p_latitude: buildingDraft.latitude ? Number(buildingDraft.latitude) : null,
       p_longitude: buildingDraft.longitude ? Number(buildingDraft.longitude) : null,
+      p_synonyms: parseSynonyms(buildingDraft.synonyms),
     });
     if (error) return setErr(friendly(error));
     setErr(""); setMsg("Building updated."); setEditingBuilding(null); load();
@@ -135,12 +139,12 @@ export default function Admin() {
   function startPlaceEdit(item: Place) {
     setEditingPlace(item.id);
     setPlaceDraft({
-      id: item.id, name: item.name, description: item.description ?? "", type: item.place_type,
+      id: item.id, name: item.name, synonyms: item.synonyms.join(", "), description: item.description ?? "", type: item.place_type,
       latitude: item.latitude?.toString() ?? "", longitude: item.longitude?.toString() ?? "",
     });
   }
 
-  async function savePlace(item: { id: string | null; name: string; description: string; type: PlaceType; latitude: string; longitude: string }) {
+  async function savePlace(item: { id: string | null; name: string; synonyms: string; description: string; type: PlaceType; latitude: string; longitude: string }) {
     const { error } = await supabase.rpc("admin_upsert_campus_place", {
       p_place_id: item.id,
       p_name: item.name.trim(),
@@ -148,11 +152,12 @@ export default function Admin() {
       p_place_type: item.type,
       p_latitude: item.latitude ? Number(item.latitude) : null,
       p_longitude: item.longitude ? Number(item.longitude) : null,
+      p_synonyms: parseSynonyms(item.synonyms),
     });
     if (error) return setErr(friendly(error));
     setErr(""); setMsg(item.id ? "Campus place updated." : "Campus place created.");
     setEditingPlace(null); setPlaceDraft(null);
-    if (!item.id) setPlace({ name: "", description: "", type: "class_building", latitude: "", longitude: "" });
+    if (!item.id) setPlace({ name: "", synonyms: "", description: "", type: "class_building", latitude: "", longitude: "" });
     load();
   }
 
@@ -214,6 +219,10 @@ export default function Admin() {
             <h2>New building</h2>
             <div className="form-group">
               <label>Building name<input required value={bName} onChange={(e) => setBName(e.target.value)} placeholder="e.g. Block A" /></label>
+              <label>Building synonyms
+                <input value={bSynonyms} onChange={(e) => setBSynonyms(e.target.value)} placeholder="Comma-separated, e.g. A Block, North hostel" />
+                <span className="settings-help">Students can use these names to find the building.</span>
+              </label>
               <label>Building description
                 <textarea required value={desc} onChange={(e) => setDesc(e.target.value)} placeholder="Describe the location and facilities" rows={3} />
               </label>
@@ -265,6 +274,7 @@ export default function Admin() {
             <h2>Add class building, library or mess</h2>
             <div className="form-group">
               <label>Name<input required value={place.name} onChange={(e) => setPlace({ ...place, name: e.target.value })} placeholder="e.g. Central Library" /></label>
+              <label>Synonyms<input value={place.synonyms} onChange={(e) => setPlace({ ...place, synonyms: e.target.value })} placeholder="Comma-separated alternate names" /></label>
               <label>Place type<select value={place.type} onChange={(e) => setPlace({ ...place, type: e.target.value as PlaceType })}>
                 {PLACE_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}
               </select></label>
@@ -283,6 +293,7 @@ export default function Admin() {
             {places.map((item) => editingPlace === item.id && placeDraft ? (
               <div className="admin-place-edit" key={item.id}>
                 <label>Name<input value={placeDraft.name} onChange={(e) => setPlaceDraft({ ...placeDraft, name: e.target.value })} /></label>
+                <label>Synonyms<input value={placeDraft.synonyms} onChange={(e) => setPlaceDraft({ ...placeDraft, synonyms: e.target.value })} placeholder="Comma-separated alternate names" /></label>
                 <label>Type<select value={placeDraft.type} onChange={(e) => setPlaceDraft({ ...placeDraft, type: e.target.value as PlaceType })}>{PLACE_TYPES.map((type) => <option key={type.value} value={type.value}>{type.label}</option>)}</select></label>
                 <label>Description<textarea value={placeDraft.description} onChange={(e) => setPlaceDraft({ ...placeDraft, description: e.target.value })} rows={2} /></label>
                 <div className="input-row">
@@ -293,7 +304,7 @@ export default function Admin() {
               </div>
             ) : (
               <div className="admin-place-row" key={item.id}>
-                <div><strong>{item.name}</strong><span>{PLACE_TYPES.find((type) => type.value === item.place_type)?.label ?? item.place_type}</span></div>
+                <div><strong>{item.name}</strong><span>{PLACE_TYPES.find((type) => type.value === item.place_type)?.label ?? item.place_type}</span>{item.synonyms.length > 0 && <span>Also known as: {item.synonyms.join(", ")}</span>}</div>
                 <span>{item.latitude ?? "—"}, {item.longitude ?? "—"}</span>
                 <button className="btn-outline btn-sm" type="button" onClick={() => startPlaceEdit(item)}>Edit</button>
               </div>
@@ -321,6 +332,9 @@ export default function Admin() {
               {editingBuilding === b.id ? (
                 <div className="admin-edit-form">
                   <label>Building name<input value={buildingDraft.name} onChange={(e) => setBuildingDraft({ ...buildingDraft, name: e.target.value })} /></label>
+                  <label>Building synonyms
+                    <input value={buildingDraft.synonyms} onChange={(e) => setBuildingDraft({ ...buildingDraft, synonyms: e.target.value })} placeholder="Comma-separated alternate names" />
+                  </label>
                   <label>Description<textarea required value={buildingDraft.description} onChange={(e) => setBuildingDraft({ ...buildingDraft, description: e.target.value })} rows={3} /></label>
                   <div className="input-row">
                     <label>Latitude<input type="number" step="any" min="-90" max="90" value={buildingDraft.latitude} onChange={(e) => setBuildingDraft({ ...buildingDraft, latitude: e.target.value })} /></label>
@@ -330,7 +344,11 @@ export default function Admin() {
                 </div>
               ) : (
                 <div className="admin-inventory__building-header">
-                  <div><h2>{b.name}</h2><p>{b.description || "No description provided."}</p></div>
+                  <div>
+                    <h2>{b.name}</h2>
+                    <p>{b.description || "No description provided."}</p>
+                    {b.synonyms.length > 0 && <p>Also known as: {b.synonyms.join(", ")}</p>}
+                  </div>
                   <button className="btn-outline btn-sm" onClick={() => startBuildingEdit(b)}>Edit building</button>
                 </div>
               )}

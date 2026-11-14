@@ -8,6 +8,7 @@ import Admin from "./pages/Admin";
 import AIAssistant from "./pages/AIAssistant";
 import AdminBookings from "./pages/AdminBookings";
 import AdminSettings from "./pages/AdminSettings";
+import AdminCampus from "./pages/AdminCampus";
 import Profile from "./pages/Profile";
 
 type Me = { id: string; full_name: string; role: "student" | "admin" } | null;
@@ -136,6 +137,13 @@ export default function App() {
                     >
                       Settings
                     </NavLink>
+                    <NavLink
+                      to="/admin/campus"
+                      onClick={() => setMenuOpen(false)}
+                      className={({ isActive }) => "topnav__link" + (isActive ? " active" : "")}
+                    >
+                      Campus
+                    </NavLink>
                   </>
                 )}
               </nav>
@@ -171,6 +179,7 @@ export default function App() {
           <Route path="/admin" element={me?.role === "admin" ? <Admin /> : <Navigate to="/login" />} />
           <Route path="/admin/bookings" element={me?.role === "admin" ? <AdminBookings /> : <Navigate to="/login" />} />
           <Route path="/admin/settings" element={me?.role === "admin" ? <AdminSettings /> : <Navigate to="/login" />} />
+          <Route path="/admin/campus" element={me?.role === "admin" ? <AdminCampus /> : <Navigate to="/login" />} />
           <Route path="*" element={<Navigate to={me ? homePath : "/login"} />} />
         </Routes>
       </main>

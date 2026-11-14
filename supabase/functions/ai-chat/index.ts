@@ -121,7 +121,9 @@ RESPONSE STYLE:
 BUILDING RULES:
 
 27. Use get_building_details ONLY when a student asks about a building,
-    building descriptions, campus locations or building overviews.
+    building descriptions, campus locations or building overviews. This
+    includes hostel buildings and campus places such as class buildings,
+    libraries and messes.
 
 28. Do not call get_building_details when the student is only searching
     for available rooms, beds or facilities (use search_rooms instead).
@@ -135,6 +137,9 @@ CAMPUS CONTEXT:
     student asks about their profile, campus map, destinations, or commute.
 31. Treat image values as frontend image references only. Do not describe image
     contents unless visual image data is explicitly provided.
+32. Use the saved campus AI notes when answering campus questions. Treat them
+    as administrator-provided facts and instructions; do not invent details
+    that are not in the notes.
 `;
 
 // ============================================================
@@ -203,8 +208,9 @@ const tools = [
       {
         name: "get_building_details",
         description:
-          "Fetch the name and description of hostel buildings from the active buildings table. " +
-          "Use this ONLY when a student asks about a building, its description, or building overview.",
+          "Fetch names, synonyms, descriptions and locations for hostel buildings and campus places " +
+          "(class buildings, libraries and messes). Use this ONLY when a student asks about a building, " +
+          "campus place, its description, or a building overview.",
         parameters: {
           type: "OBJECT",
           properties: {
@@ -247,13 +253,13 @@ function haversineMeters(
 }
 
 async function getCampusContext(sb: ReturnType<typeof createClient>, userId: string) {
-  const [buildingResult, placeResult, routeResult, routineResult] = await Promise.all([
+  const [buildingResult, placeResult, routeResult, routineResult, campusDetailsResult, campusNotesResult] = await Promise.all([
     sb.from("buildings")
-      .select("id, name, description, latitude, longitude")
+      .select("id, name, synonyms, description, latitude, longitude")
       .eq("is_active", true)
       .order("name"),
     sb.from("campus_places")
-      .select("id, name, place_type, description, latitude, longitude")
+      .select("id, name, synonyms, place_type, description, latitude, longitude")
       .eq("is_active", true)
       .order("name"),
     sb.from("commute_routes")
@@ -262,11 +268,16 @@ async function getCampusContext(sb: ReturnType<typeof createClient>, userId: str
       .select("id")
       .eq("student_id", userId)
       .maybeSingle(),
+    sb.from("campus_details").select("*").single(),
+    sb.from("campus_ai_notes")
+      .select("title, content, category, updated_at")
+      .eq("is_active", true)
+      .order("updated_at", { ascending: false }),
   ]);
-  const queryError = [buildingResult, placeResult, routeResult, routineResult].find((result) => result.error)?.error;
+  const queryError = [buildingResult, placeResult, routeResult, routineResult, campusDetailsResult, campusNotesResult].find((result) => result.error)?.error;
   if (queryError) throw queryError;
 
-  const routineId = routineResult.data?.id as string | undefined;
+  const   routineId = routineResult.data?.id as string | undefined;
   const visitResult = routineId
     ? await sb.from("routine_visits").select("place_id, visits_per_week").eq("routine_id", routineId)
     : { data: [], error: null };
@@ -319,9 +330,28 @@ async function getCampusContext(sb: ReturnType<typeof createClient>, userId: str
   }).sort((a, b) => b.matched_places - a.matched_places || a.weekly_distance_meters - b.weekly_distance_meters);
 
   return {
+    campus_details: campusDetailsResult.data,
+    campus_ai_notes: campusNotesResult.data ?? [],
+    buildings: buildings.map((building: any) => ({
+      name: building.name,
+      synonyms: building.synonyms ?? [],
+      description: building.description,
+      latitude: building.latitude,
+      longitude: building.longitude,
+      type: "hostel_building",
+    })),
+    places: places.map((place: any) => ({
+      name: place.name,
+      synonyms: place.synonyms ?? [],
+      type: place.place_type,
+      description: place.description,
+      latitude: place.latitude,
+      longitude: place.longitude,
+    })),
     map_locations: [
       ...buildings.map((building: any) => ({
         name: building.name,
+        synonyms: building.synonyms ?? [],
         type: "hostel",
         latitude: building.latitude,
         longitude: building.longitude,
@@ -329,6 +359,7 @@ async function getCampusContext(sb: ReturnType<typeof createClient>, userId: str
       })),
       ...places.map((place: any) => ({
         name: place.name,
+        synonyms: place.synonyms ?? [],
         type: place.place_type,
         latitude: place.latitude,
         longitude: place.longitude,
@@ -686,7 +717,10 @@ ${JSON.stringify(campusContext)}`,
 
         if (!isObject(r)) return false;
 
-        const building = safeString(r.building_name).toLowerCase();
+        const buildingNames = [
+          safeString(r.building_name),
+          ...(Array.isArray(r.building_synonyms) ? r.building_synonyms : []),
+        ].map((value) => value.toLowerCase());
         const type = safeString(r.room_type).toLowerCase();
 
         const facilities = normalizeFacilities(r.facilities);
@@ -702,7 +736,7 @@ ${JSON.stringify(campusContext)}`,
 
         if (
           buildingName &&
-          !building.includes(buildingName.toLowerCase())
+          !buildingNames.some((value) => value.includes(buildingName.toLowerCase()))
         ) {
           return false;
         }
@@ -911,27 +945,34 @@ ${JSON.stringify(campusContext)}`,
       console.log("========== BUILDING DETAILS ==========");
       console.log("Building name query:", buildingName);
 
-      let query = sb
+      const [buildingResult, placeResult] = await Promise.all([
+        sb
         .from("buildings")
-        .select("id, name, description")
+        .select("id, name, synonyms, description, latitude, longitude")
         .eq("is_active", true)
-        .order("name");
-
-      if (buildingName) {
-        query = query.ilike("name", `%${buildingName}%`);
-      }
-
-      const { data, error } = await query;
-
-      if (error) {
-        console.error("get_building_details failed:", error);
+        .order("name"),
+        sb.from("campus_places")
+          .select("id, name, synonyms, description, place_type, latitude, longitude")
+          .eq("is_active", true)
+          .order("name"),
+      ]);
+      if (buildingResult.error || placeResult.error) {
+        console.error("get_building_details failed:", buildingResult.error ?? placeResult.error);
         throw new Error("Could not retrieve building details.");
       }
 
-      const buildingsList = (data ?? []).map((b: any) => ({
+      const query = buildingName.toLowerCase();
+      const matches = [...(buildingResult.data ?? []).map((b: any) => ({ ...b, type: "hostel_building" })),
+        ...(placeResult.data ?? [])].filter((b: any) =>
+        !query || [b.name, ...(b.synonyms ?? [])].some((value) => safeString(value).toLowerCase().includes(query)));
+      const buildingsList = matches.map((b: any) => ({
         id: b.id,
         name: b.name,
+        synonyms: b.synonyms ?? [],
+        type: b.type ?? b.place_type,
         description: b.description || "No description available.",
+        latitude: b.latitude,
+        longitude: b.longitude,
       }));
 
       console.log("Matching buildings:", buildingsList.length);

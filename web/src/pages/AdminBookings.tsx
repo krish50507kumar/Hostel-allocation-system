@@ -35,15 +35,6 @@ export default function AdminBookings() {
 
   return (
     <section>
-      <div className="page-hero">
-        <div className="page-hero__pattern" /><div className="page-hero__pattern2" />
-        <div className="page-hero__text">
-          <div className="page-hero__eyebrow">Admin</div>
-          <h1>All Bookings</h1>
-          <p>Search, filter, and inspect reservations across all buildings and rooms.</p>
-        </div>
-      </div>
-
       <div className="filter-bar">
         <label style={{ flex: 2, minWidth: 220 }}>
           Search

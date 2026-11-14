@@ -28,6 +28,7 @@ HostelHub is a modern university hostel booking and room allocation platform. It
 
 ### Student Portal
 - **Real-Time Room & Bed Browser:** Browse available rooms filtered by building, view individual bed statuses, and inspect verified facility tags (`Wi-Fi`, `Study Desk`, `Attached Bathroom`, `AC`, etc.).
+- **Building Synonym Search:** Administrators can store alternate building names, and students can find buildings using either the official name or a synonym.
 - **Instant Bed Booking:** Pick specific bed numbers and receive a unique booking reference.
 - **AI Assistant:** Conversational search powered by Gemini to ask natural language questions (e.g., *"Find an available bed in Building A with an attached bath"*) and receive instant booking proposals.
 - **Booking Management:** View active and past reservations, with cancellation rules enforced according to the institutional cutoff policy.
@@ -37,6 +38,8 @@ HostelHub is a modern university hostel booking and room allocation platform. It
 - **Inventory Creation:** Forms to quickly add buildings and create rooms with dynamic bed capacities.
 - **All Bookings Explorer:** Debounced search across booking references, student names, student numbers, and room numbers with status filtering (`Active` / `Cancelled`) and pagination.
 - **Academic Calendar Settings:** Configure college start dates, cancellation lead times (in days), and local timezones with a dynamic cancellation cutoff preview.
+- **Campus Information Management:** Admins can maintain campus overview, contact details, facilities, rules, emergency guidance, and synonyms for hostel buildings, class buildings, libraries, and messes.
+- **Campus AI Knowledge Base:** Admins can add multiple titled campus notes or instructions, edit them later, and remove outdated notes. Active notes are provided to the AI assistant.
 
 ---
 
@@ -54,7 +57,13 @@ HostelHub is a modern university hostel booking and room allocation platform. It
 │       ├── 0003_fix_booking.sql      # Concurrency fixes and transactional booking RPC
 │       ├── 0004_ai_proposals.sql     # AI proposal creation and expiration logic
 │       ├── 0005_admin_tools.sql      # Admin RPCs: building/room upsert & search
-│       └── 0006_replace_schema.sql   # Clean schema for routines, preferences, commute & discovery
+│       ├── 0006_replace_schema.sql   # Clean schema for routines, preferences, commute & discovery
+│       ├── 0007_admin_places_and_coordinates.sql # Campus place management and coordinates
+│       ├── 0008_group_booking_invites.sql # Group booking invitations
+│       ├── 0009_room_group_invite_capacity.sql # Group booking capacity rules
+│       ├── 0010_building_synonyms.sql # Hostel building synonyms and synonym-aware availability data
+│       ├── 0011_campus_details_and_place_synonyms.sql # Campus details and synonyms for all place types
+│       └── 0012_campus_ai_notes.sql # Flexible admin-managed campus notes for the AI
 └── web/
     ├── src/
     │   ├── pages/            # View components (Rooms, Login, MyBookings, Admin, etc.)
@@ -80,6 +89,12 @@ HostelHub is a modern university hostel booking and room allocation platform. It
    - `supabase/migrations/0004_ai_proposals.sql`
    - `supabase/migrations/0005_admin_tools.sql`
    - `supabase/migrations/0006_replace_schema.sql`
+   - `supabase/migrations/0007_admin_places_and_coordinates.sql`
+   - `supabase/migrations/0008_group_booking_invites.sql`
+   - `supabase/migrations/0009_room_group_invite_capacity.sql`
+   - `supabase/migrations/0010_building_synonyms.sql`
+   - `supabase/migrations/0011_campus_details_and_place_synonyms.sql`
+   - `supabase/migrations/0012_campus_ai_notes.sql`
 
 `0006_replace_schema.sql` is intentionally destructive for application data: it removes
 the previous public schema and recreates it for the new design. Supabase Auth users are

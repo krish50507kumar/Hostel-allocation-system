@@ -3,7 +3,7 @@ import { supabase, friendly } from "../lib";
 import { BedMeter, Facilities, SkeletonGrid } from "../components";
 
 type Row = {
-  building_id: string; building_name: string; room_id: string; room_number: string;
+  building_id: string; building_name: string; building_synonyms: string[]; room_id: string; room_number: string;
   room_type: string | null; facilities: string[]; available_beds: number; active_beds: number;
 };
 type Bed = { id: string; bed_number: string };
@@ -14,6 +14,7 @@ export default function Rooms() {
   const [err, setErr] = useState("");
   const [msg, setMsg] = useState("");
   const [building, setBuilding] = useState("");
+  const [buildingSearch, setBuildingSearch] = useState("");
   const [open, setOpen] = useState<Row | null>(null);
   const [beds, setBeds] = useState<Bed[]>([]);
   const [busy, setBusy] = useState(false);
@@ -83,14 +84,21 @@ export default function Rooms() {
     </section>
   );
 
-  const buildings = [...new Set((rows ?? []).map((r) => r.building_name))].map((name) => {
-    const rooms = (rows ?? []).filter((r) => r.building_name === name);
+  const buildings = [...new Map((rows ?? []).map((r) => [r.building_id, r])).values()].map((row) => {
+    const rooms = (rows ?? []).filter((r) => r.building_id === row.building_id);
     return {
-      name,
+      id: row.building_id,
+      name: row.building_name,
+      synonyms: row.building_synonyms ?? [],
       roomCount: rooms.length,
       availableBeds: rooms.reduce((total, room) => total + room.available_beds, 0),
     };
   });
+  const normalizedSearch = buildingSearch.trim().toLowerCase();
+  const filteredBuildings = buildings.filter((item) =>
+    !normalizedSearch ||
+    [item.name, ...item.synonyms].some((value) => value.toLowerCase().includes(normalizedSearch)),
+  );
   const shown = (rows ?? []).filter((r) => r.building_name === building);
 
   return (
@@ -118,14 +126,24 @@ export default function Rooms() {
             </div>
             <span className="section-heading__count">{buildings.length} building{buildings.length !== 1 ? "s" : ""}</span>
           </div>
+          <label style={{ display: "block", maxWidth: 480, marginBottom: 20 }}>
+            Search buildings
+            <input
+              value={buildingSearch}
+              onChange={(e) => setBuildingSearch(e.target.value)}
+              placeholder="Search by name or synonym, e.g. Block A"
+              aria-label="Search buildings by name or synonym"
+            />
+          </label>
           <ul className="building-grid" style={{ listStyle: "none", padding: 0 }}>
-            {buildings.map((b, index) => (
-              <li key={b.name}>
+            {filteredBuildings.map((b, index) => (
+              <li key={b.id}>
                 <button className="building-card" onClick={() => setBuilding(b.name)}>
                 <img className="building-card__image" src={BUILDING_IMAGE} alt={`${b.name} building`} />
                   <span className="building-card__body">
                     <span className="building-card__eyebrow">Building {String.fromCharCode(65 + index)}</span>
                     <span className="building-card__name">{b.name}</span>
+                    {b.synonyms.length > 0 && <span className="building-card__meta">Also known as: {b.synonyms.join(", ")}</span>}
                     <span className="building-card__meta">
                       {b.roomCount} room{b.roomCount !== 1 ? "s" : ""} · {b.availableBeds} bed{b.availableBeds !== 1 ? "s" : ""} available
                     </span>
@@ -135,6 +153,7 @@ export default function Rooms() {
               </li>
             ))}
           </ul>
+          {filteredBuildings.length === 0 && <p className="state">No buildings match that name or synonym.</p>}
         </>
       ) : (
         <>
@@ -206,6 +225,9 @@ export default function Rooms() {
                 </p>
               )}
             </div>
+            <p style={{ fontSize: ".78rem", color: "var(--muted)", margin: 0 }}>
+              Bed 1 is closer to the door. The last bed is closer to the air conditioner.
+            </p>
             <button className="btn-ghost btn-sm" style={{ alignSelf: "flex-start" }} onClick={() => setOpen(null)}>
               Cancel
             </button>
