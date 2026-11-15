@@ -405,11 +405,13 @@ p {
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 24px;
   margin: 0;
+  align-items: start;
 }
 
 .building-card {
   width: 100%;
-  min-height: 250px;
+  min-height: 0;
+  height: auto;
   padding: 0;
   overflow: hidden;
   text-align: left;
@@ -482,7 +484,6 @@ p {
 
 .building-card__body {
   display: flex;
-  flex: 1;
   flex-direction: column;
   gap: 5px;
   padding: 18px 20px 20px;
@@ -509,7 +510,7 @@ p {
 
 .building-card__action {
   align-self: flex-start;
-  margin-top: auto;
+  margin-top: 6px;
   padding-top: 12px;
   color: var(--accent-dk);
   font-size: .84rem;
