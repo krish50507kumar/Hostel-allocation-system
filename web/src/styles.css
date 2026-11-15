@@ -417,12 +417,15 @@ p {
   text-align: left;
   display: flex;
   flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow-sm);
   color: var(--fg);
   cursor: pointer;
+  white-space: normal;
   transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
 }
 
@@ -506,6 +509,7 @@ p {
 .building-card__meta {
   color: var(--muted);
   font-size: .83rem;
+  overflow-wrap: anywhere;
 }
 
 .building-card__action {
