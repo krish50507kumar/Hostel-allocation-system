@@ -52,14 +52,14 @@ begin
   end if;
   if (
     select count(*) from public.booking_invites
-    where inviter_id = v_inviter and status = 'pending' and expires_at > now()
+    where inviter_id = v_inviter and status = 'pending' and booking_invites.expires_at > now()
   ) >= 5 then
     raise exception 'GROUP_INVITE_LIMIT' using errcode = 'P0001';
   end if;
   if exists (
     select 1 from public.booking_invites
     where inviter_id = v_inviter and invitee_id = v_invitee.id and bed_id = p_bed_id
-      and status = 'pending' and expires_at > now()
+      and status = 'pending' and booking_invites.expires_at > now()
   ) then
     raise exception 'INVITE_ALREADY_SENT' using errcode = 'P0001';
   end if;

@@ -21,6 +21,12 @@ export function friendly(err: { message?: string } | null): string {
   if (err) console.error("Supabase error:", err); // real cause is visible in the browser console (F12)
   const m = err?.message ?? "";
   const hit = Object.keys(MESSAGES).find((k) => m.includes(k));
+  if (
+    m.includes("create_booking_invite") ||
+    m.includes("booking_invites") && (m.includes("does not exist") || m.includes("schema cache"))
+  ) {
+    return "Group booking is not enabled yet. Apply the group booking migrations to Supabase and try again.";
+  }
   return hit ? MESSAGES[hit] : "Something went wrong. Please try again.";
 }
  

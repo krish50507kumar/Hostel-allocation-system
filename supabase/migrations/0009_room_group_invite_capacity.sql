@@ -31,7 +31,7 @@ begin
   if exists (
     select 1 from public.booking_invites
     where inviter_id = v_inviter and invitee_id = v_invitee.id and bed_id = p_bed_id
-      and status = 'pending' and expires_at > now()
+      and status = 'pending' and booking_invites.expires_at > now()
   ) then
     raise exception 'INVITE_ALREADY_SENT' using errcode = 'P0001';
   end if;
@@ -68,3 +68,7 @@ begin
   join public.rooms r on r.id = bd.room_id
   where bd.id = p_bed_id;
 end $$;
+
+revoke all on function public.create_booking_invite(uuid, text, text) from public;
+grant execute on function public.create_booking_invite(uuid, text, text) to authenticated;
+notify pgrst, 'reload schema';
